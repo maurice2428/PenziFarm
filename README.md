@@ -627,3 +627,17 @@ Before installation, ensure the server has:
 ```bash
 git clone git@github.com:maurice2428/PenziFarm.git
 cd PenziFarm
+
+
+Maintainer
+
+Maurice Nzioki
+Software Systems Developer
+
+Copyright
+
+Copyright © Penzi Farm.
+
+All rights reserved.
+
+This software is proprietary and confidential. It may not be copied, distributed, modified, sublicensed, published or deployed without written authorization from Penzi Farm and the system developer.
