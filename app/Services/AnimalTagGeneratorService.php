@@ -282,7 +282,9 @@ class AnimalTagGeneratorService
         return (int) $date->year;
     }
 
+
     /**
+     * sasa
      * Uses the first alphabetic character of the actual breed name.
      */
     private function breedLetter(Breed $breed): string
