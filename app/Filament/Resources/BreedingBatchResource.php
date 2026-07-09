@@ -329,13 +329,13 @@ class BreedingBatchResource extends Resource
                     ->url(fn(BreedingBatch $record): string => BreedingRecordResource::getUrl('index', [
                         'tableFilters[batch][value]' => $record->id,
                     ])),*/
-                Tables\Actions\Action::make('openBatch')
+               /* Tables\Actions\Action::make('openBatch')
                     ->label('Open Batch')
                     ->icon('heroicon-o-folder-open')
                     ->color('info')
                     ->url(fn(BreedingBatch $record): string => static::getUrl('edit', [
                         'record' => $record,
-                    ])),
+                    ])),*/
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make()
                     ->requiresConfirmation()

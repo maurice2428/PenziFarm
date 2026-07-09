@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Pages\ProgenyExplorer;
+
 use App\Filament\Clusters\Livestock\Animals as AnimalsCluster;
 use App\Filament\Resources\AnimalResource\Pages;
 use App\Filament\Support\LocationForm;
@@ -1056,6 +1058,27 @@ class AnimalResource extends Resource
             ->filtersFormMaxHeight('min(70vh, 520px)')
             ->filtersFormColumns(2)
             ->actions([
+                Tables\Actions\Action::make('progenyExplorer')
+                    ->icon('heroicon-o-share')
+                    ->iconButton()
+                    ->tooltip('Open progeny and heredity explorer')
+                    ->color('success')
+                    ->visible(
+                        fn (): bool =>
+                            auth()->user()?->can('view progeny analytics')
+                            || auth()->user()?->hasAnyRole([
+                                'Administrator',
+                                'Admin',
+                                'Manager',
+                                'Veterinary Officer',
+                            ])
+                            || false
+                    )
+                    ->url(
+                        fn (Animal $record): string => ProgenyExplorer::getUrl([
+                            'animal' => $record->getKey(),
+                        ])
+                    ),
                 Tables\Actions\Action::make('viewAnimalProfile')
                     ->icon('heroicon-o-identification')
                     ->iconButton()
@@ -1432,6 +1455,7 @@ class AnimalResource extends Resource
             ['animal_events', 'animal_id', 'Animal events'],
             ['breeding_records', 'female_animal_id', 'Breeding records as dam'],
             ['breeding_records', 'male_animal_id', 'Breeding records as sire'],
+            ['animal_breeding_reviews', 'animal_id', 'Breeding performance reviews'],
             ['sales_invoice_items', 'animal_id', 'Sales invoice items'],
             ['sales_invoice_animal_items', 'animal_id', 'Sales invoice animal items'],
         ];

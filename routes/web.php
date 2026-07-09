@@ -151,3 +151,5 @@ Route::get(
 )
     ->middleware(['signed', 'throttle:30,1'])
     ->name('audit-sessions.email-report.pdf');
+
+require __DIR__ . '/progeny.php';
