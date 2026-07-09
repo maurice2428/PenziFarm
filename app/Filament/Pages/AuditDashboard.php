@@ -14,7 +14,7 @@ class AuditDashboard extends Page
 {
     protected static ?string $navigationGroup = 'Audit Logs';
 
-    protected static ?string $navigationLabel = 'Audit Dashboard';
+    protected static ?string $navigationLabel = 'Dashboard';
 
     protected static ?string $navigationIcon = 'heroicon-o-presentation-chart-line';
 

@@ -18,9 +18,10 @@ class PaymentSettings extends Page implements Forms\Contracts\HasForms
 
     protected static ?string $navigationGroup = 'System Settings';
 
-    protected static ?string $navigationLabel = 'Payment Settings';
+    protected static ?string $navigationLabel = 'Payment(s) ';
 
     protected static ?string $title = 'Payment Settings';
+     protected static ?int $navigationSort = 3;
 
    // protected static ? static ?string $navigationGroup = 'System Settings';
 
