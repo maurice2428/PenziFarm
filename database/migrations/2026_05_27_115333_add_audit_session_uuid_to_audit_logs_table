@@ -1,0 +1,49 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    public function up(): void
+    {
+        if (!Schema::hasTable('audit_logs')) {
+            return;
+        }
+
+        Schema::table('audit_logs', function (Blueprint $table) {
+            if (!Schema::hasColumn('audit_logs', 'audit_session_uuid')) {
+                $table
+                    ->uuid('audit_session_uuid')
+                    ->nullable()
+                    ->after('batch_uuid')
+                    ->index('audit_log_session_uuid_idx');
+            }
+
+            if (!Schema::hasColumn('audit_logs', 'response_status')) {
+                $table
+                    ->unsignedSmallInteger('response_status')
+                    ->nullable()
+                    ->after('http_method');
+            }
+        });
+    }
+
+    public function down(): void
+    {
+        if (!Schema::hasTable('audit_logs')) {
+            return;
+        }
+
+        Schema::table('audit_logs', function (Blueprint $table) {
+            if (Schema::hasColumn('audit_logs', 'audit_session_uuid')) {
+                $table->dropIndex('audit_log_session_uuid_idx');
+                $table->dropColumn('audit_session_uuid');
+            }
+
+            if (Schema::hasColumn('audit_logs', 'response_status')) {
+                $table->dropColumn('response_status');
+            }
+        });
+    }
+};

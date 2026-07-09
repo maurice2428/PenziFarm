@@ -1,0 +1,1072 @@
+@config "./tailwind.config.js";
+/*@import "../../../../vendor/filament/filament/resources/css/theme.css";*/
+
+@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@300..700&display=swap');
+
+/*@import '../../../../vendor/filament/filament/resources/css/theme.css';*/
+@font-face {
+    font-family: 'ChopinScript';
+    src: url('/fonts/ChopinScript.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    --font-sans: 'Comfortaa', sans-serif;
+}
+
+html,
+body,
+.fi-body,
+.fi-panel {
+    font-family: 'Comfortaa', sans-serif !important;
+}
+
+.fi-page-header-heading,
+.fi-section-header-heading,
+.fi-ta-header-cell-label,
+.fi-btn-label,
+.fi-sidebar-item-label,
+.fi-topbar,
+.fi-sidebar,
+.fi-input,
+.fi-select-input,
+.fi-modal,
+.fi-tabs-item,
+.fi-badge,
+.fi-fo-field-wrp-label,
+.fi-fo-field-wrp-helper-text,
+.fi-dropdown-list-item-label,
+.fi-ta-text,
+.fi-ta-cell,
+.fi-fo-field-wrp,
+.fi-in-entry-wrp,
+.fi-section,
+.fi-card {
+    font-family: 'Comfortaa', sans-serif !important;
+}
+
+.fi-simple-header {
+    display: none !important;
+}
+
+.fi-simple-main-ctn {
+    max-width: 100% !important;
+    padding: 0 !important;
+}
+
+.fi-simple-page {
+    min-height: 100vh;
+    padding: 0 !important;
+}
+
+.fi-simple-layout {
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at top left, rgba(22, 163, 74, 0.08), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.06), transparent 25%),
+        linear-gradient(135deg, #f3f7f5 0%, #eef4f1 100%);
+}
+
+.dark .fi-simple-layout {
+    background:
+        radial-gradient(circle at top left, rgba(22, 163, 74, 0.10), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.06), transparent 25%),
+        linear-gradient(135deg, #0f172a 0%, #111827 100%);
+}
+
+.lf-login-page {
+    min-height: 100vh;
+    color: #0f172a;
+}
+
+.dark .lf-login-page {
+    color: #f8fafc;
+}
+
+.lf-login-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.lf-login-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(14px);
+}
+
+.dark .lf-login-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(17, 24, 39, 0.72);
+}
+
+.lf-login-brand-mini {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    min-width: 0;
+}
+
+.lf-login-brand-mini-logo {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.dark .lf-login-brand-mini-logo {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.lf-login-brand-mini-logo img {
+    max-width: 34px;
+    max-height: 34px;
+    object-fit: contain;
+}
+
+.lf-login-brand-mini-title {
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.lf-login-brand-mini-subtitle {
+    font-size: 0.78rem;
+    opacity: 0.72;
+}
+
+.lf-theme-dropdown-wrap {
+    position: relative;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.lf-theme-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+    background: rgba(255, 255, 255, 0.90);
+    color: #0f172a;
+    padding: 0.72rem 1rem;
+    border-radius: 14px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.lf-theme-trigger:hover {
+    border-color: var(--lf-primary);
+    color: var(--lf-primary);
+}
+
+.dark .lf-theme-trigger {
+    background: rgba(255, 255, 255, 0.07);
+    color: #f8fafc;
+    border-color: rgba(255, 255, 255, 0.10);
+}
+
+.lf-theme-chevron {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s ease;
+}
+
+.lf-theme-dropdown-wrap.open .lf-theme-chevron {
+    transform: rotate(180deg);
+}
+
+.lf-theme-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    min-width: 156px;
+    background: #fff;
+    border: 1px solid rgba(15, 23, 42, 0.09);
+    border-radius: 14px;
+    box-shadow: 0 12px 36px rgba(15, 23, 42, 0.12);
+    overflow: hidden;
+    z-index: 999;
+}
+
+.dark .lf-theme-menu {
+    background: #1e293b;
+    border-color: rgba(255, 255, 255, 0.10);
+}
+
+.lf-theme-dropdown-wrap.open .lf-theme-menu {
+    display: block;
+}
+
+.lf-theme-option {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.72rem 1rem;
+    background: none;
+    border: none;
+    text-align: left;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #0f172a;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.lf-theme-option:hover {
+    background: rgba(22, 163, 74, 0.08);
+    color: var(--lf-primary);
+}
+
+.dark .lf-theme-option {
+    color: #f8fafc;
+}
+
+.dark .lf-theme-option:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.lf-login-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1.08fr 0.92fr;
+    min-height: calc(100vh - 86px);
+}
+
+.lf-login-hero {
+    position: relative;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    min-height: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.lf-login-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(135deg, rgba(6, 78, 59, 0.88), rgba(22, 101, 52, 0.68)),
+        linear-gradient(45deg, rgba(120, 53, 15, 0.18), rgba(0, 0, 0, 0.08));
+}
+
+.lf-login-hero-content {
+    position: relative;
+    z-index: 1;
+    max-width: 680px;
+    padding: 3rem 3.25rem;
+    color: #fff;
+}
+
+.lf-login-hero-logo-wrap {
+    margin-bottom: 1.5rem;
+}
+
+.lf-login-hero-logo {
+    width: auto;
+    max-width: 220px;
+    max-height: 100px;
+    object-fit: contain;
+    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
+}
+
+.lf-login-hero-title {
+    margin: 0 0 1rem;
+    font-size: 2.3rem;
+    line-height: 1.1;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.lf-login-hero-text {
+    margin: 0;
+    max-width: 580px;
+    font-size: 1rem;
+    line-height: 1.8;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.lf-login-hero-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.lf-login-hero-card {
+    border-radius: 18px;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(12px);
+}
+
+.lf-login-hero-card-title {
+    font-size: 0.92rem;
+    font-weight: 800;
+    margin-bottom: 0.35rem;
+}
+
+.lf-login-hero-card-text {
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.82);
+    line-height: 1.55;
+}
+
+.lf-login-form-side {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.lf-login-card {
+    width: 100%;
+    max-width: 560px;
+    border-radius: 30px;
+    padding: 2.2rem;
+    background: rgba(255, 255, 255, 0.90);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.10);
+    backdrop-filter: blur(14px);
+}
+
+.dark .lf-login-card {
+    background: rgba(17, 24, 39, 0.76);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.lf-login-card-header {
+    margin-bottom: 1.6rem;
+}
+
+.lf-login-card-title {
+    margin: 0 0 0.35rem;
+    font-size: 1.75rem;
+    line-height: 1.2;
+    font-weight: 800;
+}
+
+.lf-login-card-subtitle {
+    margin: 0;
+    font-size: 0.94rem;
+    color: #64748b;
+}
+
+.dark .lf-login-card-subtitle {
+    color: #cbd5e1;
+}
+
+.lf-login-form .fi-fo-field-wrp {
+    margin-bottom: 1rem;
+}
+
+.lf-login-form label {
+    font-weight: 700;
+}
+
+.lf-login-form .fi-input-wrp {
+    min-height: 56px;
+    border-radius: 18px !important;
+    box-shadow: none !important;
+    overflow: hidden;
+}
+
+.lf-login-form input {
+    min-height: 56px;
+    border-radius: 18px !important;
+    font-size: 0.95rem;
+}
+
+.lf-login-form .fi-input-wrp-suffix {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-right: 0.75rem;
+}
+
+.lf-login-form .fi-input-wrp-suffix button,
+.lf-login-form .fi-input-wrp-suffix .fi-icon-btn {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+    border-radius: 999px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+}
+
+.lf-login-form .fi-input-wrp-suffix svg,
+.lf-login-form .fi-input-wrp-suffix .fi-icon {
+    width: 18px !important;
+    height: 18px !important;
+    max-width: 18px !important;
+    max-height: 18px !important;
+}
+
+.lf-login-form .fi-checkbox {
+    margin-top: 0.25rem;
+}
+
+.lf-login-forgot-wrap {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.1rem;
+    margin-bottom: 0.25rem;
+}
+
+.lf-login-forgot-link {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--lf-primary);
+    text-decoration: none;
+}
+
+.lf-login-forgot-link:hover {
+    opacity: 0.78;
+    text-decoration: underline;
+}
+
+.lf-login-submit-wrap {
+    margin-top: 1.25rem;
+}
+
+.lf-login-submit-btn {
+    width: 100%;
+    justify-content: center;
+    border-radius: 18px !important;
+    min-height: 54px;
+    font-weight: 800;
+    transition: all 0.2s ease;
+}
+
+.lf-login-submit-btn:hover {
+    transform: translateY(-1px);
+}
+
+.lf-login-card-footer {
+    margin-top: 1.3rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    text-align: center;
+    font-size: 0.78rem;
+    color: #64748b;
+}
+
+.dark .lf-login-card-footer {
+    border-top-color: rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+}
+
+@media (max-width: 1100px) {
+    .lf-login-body {
+        grid-template-columns: 1fr;
+    }
+
+    .lf-login-hero {
+        min-height: 320px;
+    }
+
+    .lf-login-hero-content {
+        padding: 2rem 1.5rem;
+    }
+
+    .lf-login-form-side {
+        padding: 1.25rem;
+    }
+
+    .lf-login-card {
+        max-width: 620px;
+    }
+}
+
+@media (max-width: 720px) {
+    .lf-login-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.85rem 1rem;
+    }
+
+    .lf-login-brand-mini-text {
+        min-width: 0;
+    }
+
+    .lf-login-brand-mini-title {
+        font-size: 0.95rem;
+    }
+
+    .lf-login-brand-mini-subtitle {
+        font-size: 0.72rem;
+    }
+
+    .lf-theme-dropdown-wrap {
+        margin-left: auto;
+    }
+
+    .lf-theme-trigger {
+        padding: 0.62rem 0.85rem;
+        font-size: 0.8rem;
+    }
+
+    .lf-login-hero-title {
+        font-size: 1.75rem;
+    }
+
+    .lf-login-hero-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .lf-login-form-side {
+        padding: 1rem;
+    }
+
+    .lf-login-card {
+        padding: 1.4rem;
+        border-radius: 24px;
+        max-width: 100%;
+    }
+
+    .lf-login-card-title {
+        font-size: 1.9rem;
+    }
+
+    .lf-login-form .fi-input-wrp,
+    .lf-login-form input {
+        min-height: 54px;
+    }
+}
+
+.custom-exec-dashboard {
+    --exec-border: #d8e3d2;
+    --exec-primary: #14532d;
+    --exec-soft: #f7fbf6;
+    --exec-gold: #c59d2a;
+    --exec-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.exec-dashboard-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.exec-dashboard-hero {
+    background:
+        linear-gradient(135deg, rgba(20, 83, 45, 0.96), rgba(22, 101, 52, 0.88)),
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.10), transparent 40%);
+    border-radius: 1.5rem;
+    padding: 1.75rem;
+    box-shadow: var(--exec-shadow);
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.exec-dashboard-hero__content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.exec-dashboard-kicker {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    opacity: 0.86;
+    margin-bottom: 0.45rem;
+}
+
+.exec-dashboard-title {
+    font-size: clamp(1.8rem, 2.5vw, 2.8rem);
+    line-height: 1.1;
+    font-weight: 800;
+    margin: 0;
+    color: #fff;
+}
+
+.exec-dashboard-subtitle {
+    margin-top: 0.75rem;
+    max-width: 880px;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 0.98rem;
+}
+
+.exec-dashboard-fieldset {
+    border: 1px solid var(--exec-border);
+    border-radius: 1.5rem;
+    background: linear-gradient(180deg, #ffffff, #fbfdf9);
+    box-shadow: var(--exec-shadow);
+    padding: 1.4rem 1.25rem 1.25rem;
+}
+
+.exec-dashboard-fieldset legend {
+    padding: 0 0.85rem;
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--exec-primary);
+    letter-spacing: 0.02em;
+}
+
+.exec-widget-stack {
+    margin-top: 0.5rem;
+}
+
+.custom-exec-dashboard .fi-wi-widget {
+    border-radius: 1.25rem !important;
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.05);
+    border: 1px solid rgba(20, 83, 45, 0.08);
+    transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.custom-exec-dashboard .fi-wi-widget:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.10);
+    border-color: rgba(20, 83, 45, 0.18);
+}
+
+.dashboard-filter-wrap {
+    margin-bottom: 1rem;
+}
+
+.fi-topbar .fi-topbar-start,
+.fi-topbar .fi-topbar-end {
+    align-items: center;
+}
+
+.fi-topbar .fi-topbar-search {
+    max-width: 520px;
+    width: 100%;
+}
+
+@media (max-width: 1024px) {
+    .fi-topbar .fi-topbar-search {
+        max-width: 100%;
+    }
+
+    .exec-dashboard-hero {
+        padding: 1.25rem;
+    }
+
+    .exec-dashboard-fieldset {
+        padding: 1rem;
+    }
+}
+
+.custom-exec-dashboard {
+    --exec-border: #d8e3d2;
+    --exec-primary: #14532d;
+    --exec-soft: #f7fbf6;
+    --exec-gold: #c59d2a;
+    --exec-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.exec-dashboard-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.exec-dashboard-hero {
+    background:
+        linear-gradient(135deg, rgba(20, 83, 45, 0.96), rgba(22, 101, 52, 0.88)),
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.10), transparent 40%);
+    border-radius: 1.5rem;
+    padding: 1.75rem;
+    box-shadow: var(--exec-shadow);
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.exec-dashboard-hero__content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.exec-dashboard-kicker {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    opacity: 0.86;
+    margin-bottom: 0.45rem;
+}
+
+.exec-dashboard-title {
+    font-size: clamp(1.8rem, 2.5vw, 2.8rem);
+    line-height: 1.1;
+    font-weight: 800;
+    margin: 0;
+    color: #fff;
+}
+
+.exec-dashboard-subtitle {
+    margin-top: 0.75rem;
+    max-width: 880px;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 0.98rem;
+}
+
+.exec-dashboard-fieldset {
+    border: 1px solid var(--exec-border);
+    border-radius: 1.5rem;
+    background: linear-gradient(180deg, #ffffff, #fbfdf9);
+    box-shadow: var(--exec-shadow);
+    padding: 1.4rem 1.25rem 1.25rem;
+}
+
+.exec-dashboard-fieldset legend {
+    padding: 0 0.85rem;
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--exec-primary);
+    letter-spacing: 0.02em;
+}
+
+.exec-widget-stack {
+    margin-top: 0.5rem;
+}
+
+.custom-exec-dashboard .fi-wi-widget {
+    border-radius: 1.25rem !important;
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.05);
+    border: 1px solid rgba(20, 83, 45, 0.08);
+    transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.custom-exec-dashboard .fi-wi-widget:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.10);
+    border-color: rgba(20, 83, 45, 0.18);
+}
+
+.dashboard-filter-wrap {
+    margin-bottom: 1rem;
+}
+
+.fi-topbar .fi-topbar-start,
+.fi-topbar .fi-topbar-end {
+    align-items: center;
+}
+
+.fi-topbar .fi-topbar-search {
+    max-width: 520px;
+    width: 100%;
+}
+
+@media (max-width: 1024px) {
+    .fi-topbar .fi-topbar-search {
+        max-width: 100%;
+    }
+
+    .exec-dashboard-hero {
+        padding: 1.25rem;
+    }
+
+    .exec-dashboard-fieldset {
+        padding: 1rem;
+    }
+}
+
+.fi-topbar .fi-topbar-start,
+.fi-topbar .fi-topbar-end {
+    align-items: center;
+}
+
+.fi-topbar .fi-topbar-search {
+    max-width: 520px;
+    width: 100%;
+}
+
+@media (max-width: 1024px) {
+    .fi-topbar .fi-topbar-search {
+        max-width: 100%;
+    }
+}
+
+/* Remove all border radius from inputs */
+.fi-input,
+.fi-select-input,
+.fi-textarea,
+.fi-file-upload,
+.fi-checkbox,
+.fi-radio,
+.fi-toggle,
+.fi-date-time-picker input,
+.fi-forms-component input,
+.fi-forms-component select,
+.fi-forms-component textarea {
+    border-radius: 0 !important;
+}
+
+.fi-btn {
+    border-radius: 0 !important;
+}
+
+[data-widget="breed-current-average-weight-chart-widget"] canvas {
+    height: 550px !important;
+}
+
+[data-widget="breed-weight-trend-chart-widget"] canvas {
+    height: 550px !important;
+}
+
+.fi-wi-chart canvas {
+    height: 550px !important;
+}
+
+/* =========================
+   SAFE TOPBAR ORDER FIX
+   [menu] [search] ... [theme] [notification] [avatar]
+========================= */
+
+.fi-topbar nav {
+    display: flex !important;
+    align-items: center !important;
+    gap: .6rem !important;
+}
+
+/* Search after Filament menu toggle */
+.farm-topbar-search-inline {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: 520px !important;
+    display: flex !important;
+    align-items: center !important;
+    margin-left: .5rem !important;
+}
+
+.farm-topbar-search-inline>div {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+.farm-topbar-search-inline input {
+    width: 100% !important;
+    height: 2.35rem !important;
+    font-size: .85rem !important;
+    padding-inline: .85rem !important;
+    border-radius: .75rem !important;
+    background: rgba(255, 255, 255, .75) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+}
+
+/* Right side */
+.fi-topbar-end {
+    margin-left: auto !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: .45rem !important;
+    flex-shrink: 0 !important;
+}
+
+/* Only your custom theme button */
+.farm-theme-toggle {
+    order: 1 !important;
+}
+
+/* Notifications */
+.fi-topbar-end .fi-notifications-trigger,
+.fi-topbar-end [title="Notifications"] {
+    order: 2 !important;
+}
+
+/* Avatar */
+.fi-user-menu {
+    order: 3 !important;
+}
+
+
+
+
+/* =========================
+   MOBILE TOPBAR FINAL
+   Row 1: [menu] ... [theme] [notification] [avatar]
+   Row 2: [search full width]
+========================= */
+
+@media (max-width: 768px) {
+    .fi-topbar nav {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        gap: .35rem !important;
+        height: auto !important;
+        min-height: unset !important;
+        padding: .5rem !important;
+    }
+
+    .farm-topbar-search-inline {
+        order: 99 !important;
+        flex: 0 0 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 100% !important;
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+        padding-top: .35rem !important;
+    }
+
+    .farm-topbar-search-inline>div {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .farm-topbar-search-inline input {
+        width: 100% !important;
+        height: 2.15rem !important;
+        font-size: .75rem !important;
+        padding-inline: .7rem !important;
+        border-radius: .7rem !important;
+    }
+
+    .fi-topbar-end {
+        margin-left: auto !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: .25rem !important;
+        flex-shrink: 0 !important;
+    }
+
+    .farm-theme-toggle,
+    .fi-topbar-end button,
+    .fi-user-menu {
+        width: 2rem !important;
+        height: 2rem !important;
+        min-width: 2rem !important;
+    }
+
+    .fi-avatar {
+        width: 1.85rem !important;
+        height: 1.85rem !important;
+    }
+
+    .topbar-greeting,
+    .farm-topbar-greeting {
+        display: none !important;
+    }
+}
+
+/* =========================
+   TOPBAR RIGHT ACTION SPACING
+========================= */
+
+/* Desktop */
+.fi-topbar-end {
+    display: flex !important;
+    align-items: center !important;
+    gap: .7rem !important;
+}
+
+/* Theme toggle */
+.farm-theme-toggle {
+    margin-right: .15rem !important;
+}
+
+/* Notification button */
+.fi-topbar-end .fi-notifications-trigger,
+.fi-topbar-end [title="Notifications"] {
+    margin-right: .15rem !important;
+}
+
+/* Avatar */
+.fi-user-menu {
+    margin-left: .1rem !important;
+}
+
+/* Uniform sizing */
+.farm-theme-toggle,
+.fi-topbar-end button,
+.fi-user-menu {
+    width: 2.35rem !important;
+    height: 2.35rem !important;
+    min-width: 2.35rem !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    border-radius: .9rem !important;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .fi-topbar-end {
+        gap: .45rem !important;
+    }
+
+    .farm-theme-toggle,
+    .fi-topbar-end button,
+    .fi-user-menu {
+        width: 2rem !important;
+        height: 2rem !important;
+        min-width: 2rem !important;
+    }
+}
+
+/* =========================================
+   FORCE DASHBOARD BRAND FONT
+========================================= */
+
+html body .fi-main .farm-dashboard .farm-hero h1.farm-brand,
+html body .fi-main .farm-dashboard .farm-hero h1.farm-brand *,
+html body h1.farm-brand {
+    font-family: 'ChopinScript', cursive !important;
+    font-weight: 400 !important;
+    letter-spacing: normal !important;
+}
+
+
+.fi-modal-close-overlay {
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    background-color: rgba(15, 23, 42, 0.52) !important;
+}
+
+.fi-modal-window {
+    border-radius: 1.6rem !important;
+    overflow: hidden !important;
+    box-shadow: 0 30px 100px rgba(15, 23, 42, 0.42) !important;
+}
+
+.fi-modal-header {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.20) !important;
+}
+
+.fi-modal-footer {
+    border-top: 1px solid rgba(148, 163, 184, 0.20) !important;
+}
+
+.fi-modal-window.fi-width-md {
+    max-width: 30rem !important;
+}
+
+.fi-modal-window.fi-width-xl {
+    max-width: 42rem !important;
+}

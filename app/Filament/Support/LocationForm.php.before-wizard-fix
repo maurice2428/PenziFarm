@@ -1,0 +1,143 @@
+<?php
+
+namespace App\Filament\Support;
+
+use App\Filament\Forms\Components\LocationMapPicker;
+use Filament\Forms;
+
+class LocationForm
+{
+    public static function schema(): array
+    {
+        return [
+            Forms\Components\Section::make('Station Profile')
+                ->description('Register a farm station, paddock, shed, pen, quarantine area or other livestock location.')
+                ->icon('heroicon-o-map-pin')
+                ->columns([
+                    'default' => 1,
+                    'sm' => 2,
+                ])
+                ->schema([
+                    Forms\Components\TextInput::make('name')
+                        ->label('Location Name')
+                        ->placeholder('Example: Muserechi, Main Sheep Shed, Quarantine Pen')
+                        ->required()
+                        ->maxLength(255)
+                        ->unique(ignoreRecord: true)
+                        ->columnSpanFull(),
+
+                    Forms\Components\TextInput::make('code')
+                        ->label('Location Code')
+                        ->placeholder('Example: MUS, SHED-01')
+                        ->maxLength(50)
+                        ->unique(ignoreRecord: true),
+
+                    Forms\Components\Select::make('type')
+                        ->label('Location Type')
+                        ->options([
+                            'station' => 'Farm Station',
+                            'paddock' => 'Paddock',
+                            'shed' => 'Shed / Barn',
+                            'pen' => 'Pen / Housing Unit',
+                            'quarantine' => 'Quarantine Area',
+                            'grazing' => 'Grazing Area',
+                            'store' => 'Store / Feed Area',
+                            'other' => 'Other',
+                        ])
+                        ->default('station')
+                        ->required()
+                        ->native(false),
+
+                    Forms\Components\Toggle::make('is_active')
+                        ->label('Active Location')
+                        ->default(true)
+                        ->helperText('Only active locations can be selected when registering an animal.'),
+
+                    Forms\Components\Toggle::make('is_default')
+                        ->label('Default Animal Location')
+                        ->default(false)
+                        ->helperText('Only one location can be the animal default.'),
+                ]),
+
+            Forms\Components\Section::make('Map Pin & Address Intelligence')
+                ->description('Click the map or drag the marker. Location details are filled automatically where map data is available.')
+                ->icon('heroicon-o-map')
+                ->columns([
+                    'default' => 1,
+                    'sm' => 2,
+                ])
+                ->schema([
+                    LocationMapPicker::make('map_picker')
+                        ->label('Select Location on Map')
+                        ->dehydrated(false)
+                        ->live()
+                        ->afterStateHydrated(function (LocationMapPicker $component, $state, Forms\Get $get): void {
+                            $component->state([
+                                'latitude' => $get('latitude'),
+                                'longitude' => $get('longitude'),
+                                'county' => $get('county'),
+                                'sub_county' => $get('sub_county'),
+                                'ward' => $get('ward'),
+                                'address' => $get('address'),
+                                'place_label' => $get('place_label'),
+                            ]);
+                        })
+                        ->afterStateUpdated(function ($state, Forms\Set $set): void {
+                            if (! is_array($state)) {
+                                return;
+                            }
+
+                            $set('latitude', $state['latitude'] ?? null);
+                            $set('longitude', $state['longitude'] ?? null);
+                            $set('county', $state['county'] ?? null);
+                            $set('sub_county', $state['sub_county'] ?? null);
+                            $set('ward', $state['ward'] ?? null);
+                            $set('address', $state['address'] ?? null);
+                            $set('place_label', $state['place_label'] ?? null);
+                        })
+                        ->columnSpanFull(),
+
+                    Forms\Components\TextInput::make('latitude')
+                        ->numeric()
+                        ->label('Latitude'),
+
+                    Forms\Components\TextInput::make('longitude')
+                        ->numeric()
+                        ->label('Longitude'),
+
+                    Forms\Components\TextInput::make('county')
+                        ->label('County')
+                        ->helperText('Auto-filled from the selected map point.'),
+
+                    Forms\Components\TextInput::make('sub_county')
+                        ->label('Sub-County / Area')
+                        ->helperText('Auto-filled from the selected map point.'),
+
+                    Forms\Components\TextInput::make('ward')
+                        ->label('Ward / Neighbourhood')
+                        ->columnSpanFull(),
+
+                    Forms\Components\Textarea::make('address')
+                        ->label('Address')
+                        ->rows(3)
+                        ->columnSpanFull(),
+
+                    Forms\Components\Textarea::make('place_label')
+                        ->label('Map Place Label')
+                        ->rows(2)
+                        ->columnSpanFull(),
+                ]),
+
+            Forms\Components\Section::make('Internal Notes')
+                ->description('Optional operational notes for this location.')
+                ->icon('heroicon-o-document-text')
+                ->schema([
+                    Forms\Components\Textarea::make('notes')
+                        ->label('Notes')
+                        ->rows(4)
+                        ->placeholder('Capacity, access notes, manager instructions, stock movement guidance, etc.')
+                        ->columnSpanFull(),
+                ]),
+        ];
+    }
+}

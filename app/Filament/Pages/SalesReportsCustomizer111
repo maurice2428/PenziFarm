@@ -1,0 +1,113 @@
+<?php
+
+namespace App\Filament\Pages;
+
+use App\Models\DashboardWidgetPreference;
+use App\Support\Dashboards\SalesDashboardWidgets;
+use Filament\Forms;
+use Filament\Forms\Form;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+
+class SalesReportsCustomizer extends Page implements Forms\Contracts\HasForms
+{
+    use Forms\Concerns\InteractsWithForms;
+
+    protected static ?string $navigationIcon = 'heroicon-o-adjustments-horizontal';
+    protected static ?string $navigationGroup = '';
+    protected static ?string $navigationLabel = 'Customize Sales Dashboard';
+    protected static ?string $title = 'Customize Sales Dashboard';
+    protected static ?int $navigationSort = 21;
+
+    protected static string $view = 'filament.pages.sales-reports-customizer';
+
+    public ?array $data = [];
+
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can('view sales invoices')
+            || auth()->user()?->can('view sales payments')
+            || auth()->user()?->hasRole('Administrator');
+    }
+
+    public function mount(): void
+    {
+        $widgets = SalesDashboardWidgets::all();
+
+        $items = [];
+
+        foreach ($widgets as $key => $widget) {
+            $preference = DashboardWidgetPreference::query()
+                ->where('user_id', auth()->id())
+                ->where('dashboard_key', 'sales_reports')
+                ->where('widget_key', $key)
+                ->first();
+
+            $items[] = [
+                'widget_key' => $key,
+                'label' => $widget['label'],
+                'is_visible' => $preference?->is_visible ?? $widget['default_visible'],
+                'sort_order' => $preference?->sort_order ?? $widget['sort_order'],
+            ];
+        }
+
+        $this->form->fill([
+            'widgets' => collect($items)->sortBy('sort_order')->values()->toArray(),
+        ]);
+    }
+
+    public function form(Form $form): Form
+    {
+        return $form
+            ->statePath('data')
+            ->schema([
+                Forms\Components\Section::make('Dashboard Widgets')
+                    ->description('Choose which widgets should appear on your Sales Reports Dashboard and arrange their order.')
+                    ->schema([
+                        Forms\Components\Repeater::make('widgets')
+                            ->label('Widgets')
+                            ->reorderable()
+                            ->schema([
+                                Forms\Components\Hidden::make('widget_key'),
+
+                                Forms\Components\TextInput::make('label')
+                                    ->label('Widget')
+                                    ->disabled()
+                                    ->dehydrated(),
+
+                                Forms\Components\Toggle::make('is_visible')
+                                    ->label('Show Widget')
+                                    ->default(true),
+                            ])
+                            ->columns(2)
+                            ->itemLabel(fn (array $state): ?string => $state['label'] ?? null)
+                            ->columnSpanFull(),
+                    ]),
+            ]);
+    }
+
+    public function save(): void
+    {
+        $widgets = $this->form->getState()['widgets'] ?? [];
+
+        foreach ($widgets as $index => $widget) {
+            DashboardWidgetPreference::query()->updateOrCreate(
+                [
+                    'user_id' => auth()->id(),
+                    'dashboard_key' => 'sales_reports',
+                    'widget_key' => $widget['widget_key'],
+                ],
+                [
+                    'is_visible' => (bool) ($widget['is_visible'] ?? false),
+                    'sort_order' => $index + 1,
+                ]
+            );
+        }
+
+        Notification::make()
+            ->title('Dashboard updated')
+            ->body('Your Sales Reports Dashboard preferences have been saved.')
+            ->success()
+            ->send();
+    }
+}

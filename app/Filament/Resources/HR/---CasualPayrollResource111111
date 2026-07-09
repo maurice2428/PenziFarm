@@ -1,0 +1,368 @@
+<?php
+
+namespace App\Filament\Resources\HR;
+
+use App\Filament\Resources\HR\CasualPayrollResource\Pages;
+use App\Models\HR\CasualPayroll;
+use App\Models\HR\CasualPayrollItem;
+use Carbon\Carbon;
+use Filament\Forms;
+use Filament\Forms\Form;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+
+class CasualPayrollResource extends Resource
+{
+    protected static ?string $model = CasualPayroll::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-users';
+    protected static ?string $navigationGroup = 'Human Resource';
+    protected static ?string $navigationLabel = 'Casual Payroll';
+    protected static ?string $modelLabel = 'Casual Payroll';
+    protected static ?string $pluralModelLabel = 'Casual Payroll';
+    protected static ?int $navigationSort = 90;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return auth()->user()?->can('view casual payroll') ?? false;
+    }
+
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can('view casual payroll') ?? false;
+    }
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('view casual payroll') ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->can('create casual payroll') ?? false;
+    }
+
+    public static function canEdit($record): bool
+    {
+        return auth()->user()?->can('edit casual payroll') ?? false;
+    }
+
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->can('delete casual payroll') ?? false;
+    }
+
+    public static function form(Form $form): Form
+    {
+        return $form->schema([
+            Forms\Components\Section::make('Payroll Details')
+                ->columns(2)
+                ->schema([
+                    Forms\Components\DatePicker::make('week_start')->required(),
+                    Forms\Components\DatePicker::make('week_end')->required(),
+                    Forms\Components\TextInput::make('farm_name')->default(fn () => setting('farm.name', config('app.name'))),
+                    Forms\Components\TextInput::make('work_site'),
+                    Forms\Components\TextInput::make('total_amount')->numeric()->prefix('KES')->disabled(),
+                    Forms\Components\TextInput::make('total_days')->numeric()->disabled(),
+                ]),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->heading('Casual Payroll Register')
+            ->description('Weekly casual labour payroll, expense tracking, and HR reporting.')
+            ->columns([
+                Tables\Columns\TextColumn::make('week_start')
+                    ->label('Week Start')
+                    ->date('d M Y')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('week_end')
+                    ->label('Week End')
+                    ->date('d M Y')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('farm_name')
+                    ->label('Farm')
+                    ->searchable(),
+
+                Tables\Columns\TextColumn::make('work_site')
+                    ->label('Work Site')
+                    ->searchable()
+                    ->default('-'),
+
+                Tables\Columns\TextColumn::make('items_count')
+                    ->counts('items')
+                    ->label('Casuals')
+                    ->badge(),
+
+                Tables\Columns\TextColumn::make('total_days')
+                    ->label('Total Days')
+                    ->badge(),
+
+                Tables\Columns\TextColumn::make('total_amount')
+                    ->label('Total Expense')
+                    ->money('KES')
+                    ->weight('bold')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('uploader.name')
+                    ->label('Uploaded By')
+                    ->default('-'),
+
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Uploaded At')
+                    ->dateTime('d M Y, h:i A')
+                    ->sortable(),
+            ])
+            ->filters([
+                Tables\Filters\Filter::make('week')
+                    ->form([
+                        Forms\Components\DatePicker::make('from'),
+                        Forms\Components\DatePicker::make('to'),
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        return $query
+                            ->when($data['from'] ?? null, fn ($q, $date) => $q->whereDate('week_start', '>=', $date))
+                            ->when($data['to'] ?? null, fn ($q, $date) => $q->whereDate('week_end', '<=', $date));
+                    }),
+            ])
+            ->headerActions([
+                Tables\Actions\Action::make('downloadTemplate')
+                    ->label('Download Template')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('gray')
+                    ->action(fn () => static::downloadTemplate())
+                    ->visible(fn () => auth()->user()?->can('upload casual payroll') ?? false),
+
+                Tables\Actions\Action::make('uploadTemplate')
+                    ->label('Upload Casual Payroll')
+                    ->icon('heroicon-o-cloud-arrow-up')
+                    ->color('success')
+                    ->visible(fn () => auth()->user()?->can('upload casual payroll') ?? false)
+                    ->form([
+                        Forms\Components\DatePicker::make('week_start')
+                            ->label('Week Start')
+                            ->required(),
+
+                        Forms\Components\DatePicker::make('week_end')
+                            ->label('Week End')
+                            ->required(),
+
+                        Forms\Components\TextInput::make('work_site')
+                            ->label('Work Site')
+                            ->placeholder('Example: Mung’etho, Mau, Dhiwa'),
+
+                        Forms\Components\FileUpload::make('excel_file')
+                            ->label('Filled Excel File')
+                            ->acceptedFileTypes([
+                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                'application/vnd.ms-excel',
+                            ])
+                            ->storeFiles(false)
+                            ->required(),
+                    ])
+                    ->action(fn (array $data) => static::importTemplate($data)),
+            ])
+            ->actions([
+                Tables\Actions\ViewAction::make(),
+
+                Tables\Actions\Action::make('report')
+                    ->label('')
+                    ->tooltip('Download PDF Report')
+                    ->icon('heroicon-o-printer')
+                    ->color('warning')
+                    ->url(fn (CasualPayroll $record) => route('casual-payroll.report', $record))
+                    ->openUrlInNewTab()
+                    ->visible(fn () => auth()->user()?->can('export casual payroll') ?? false),
+
+                Tables\Actions\DeleteAction::make()
+                    ->visible(fn () => auth()->user()?->can('delete casual payroll') ?? false),
+            ])
+            ->defaultSort('week_start', 'desc');
+    }
+
+    public static function downloadTemplate()
+    {
+        $farmName = setting('farm.name', config('app.name', 'Farm ERP'));
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Casual Payroll');
+
+        $sheet->mergeCells('A1:L1');
+        $sheet->setCellValue('A1', strtoupper($farmName) . ' CASUAL PAYROLL TEMPLATE');
+
+        $sheet->setCellValue('A3', 'Instructions');
+        $sheet->setCellValue('B3', 'Fill casual records from row 7 downward. Do not change the column headers.');
+
+        $headers = [
+            'casual_name',
+            'id_number',
+            'phone_number',
+            'designation',
+            'work_site',
+            'sat_amount',
+            'sun_amount',
+            'mon_amount',
+            'tue_amount',
+            'wed_amount',
+            'thu_amount',
+            'fri_amount',
+            'total_pay',
+            'days_worked',
+            'signature',
+        ];
+
+        $sheet->fromArray($headers, null, 'A6');
+
+        for ($row = 7; $row <= 40; $row++) {
+            $sheet->setCellValue("M{$row}", "=SUM(F{$row}:L{$row})");
+            $sheet->setCellValue("N{$row}", "=COUNTIF(F{$row}:L{$row},\">0\")");
+        }
+
+        $sheet->setCellValue('A7', 'Example Casual');
+        $sheet->setCellValue('B7', '12345678');
+        $sheet->setCellValue('C7', '0712345678');
+        $sheet->setCellValue('D7', 'General Labourer');
+        $sheet->setCellValue('E7', 'Mung’etho');
+
+        $sheet->getStyle('A1:O40')->getFont()->setName('Courier New');
+
+        $sheet->getStyle('A1:O1')->applyFromArray([
+            'font' => ['bold' => true, 'size' => 16, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '008F00']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        ]);
+
+        $sheet->getStyle('A6:O6')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '111827']],
+            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+        ]);
+
+        $sheet->getStyle('A7:O40')->applyFromArray([
+            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+        ]);
+
+        foreach (range('A', 'O') as $column) {
+            $sheet->getColumnDimension($column)->setAutoSize(true);
+        }
+
+        $sheet->freezePane('A7');
+
+        $filename = 'casual-payroll-template-' . now()->format('Ymd_His') . '.xlsx';
+
+        return response()->streamDownload(function () use ($spreadsheet) {
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    public static function importTemplate(array $data): void
+    {
+        /** @var TemporaryUploadedFile $file */
+        $file = $data['excel_file'];
+
+        $spreadsheet = IOFactory::load($file->getRealPath());
+        $sheet = $spreadsheet->getSheetByName('Casual Payroll') ?? $spreadsheet->getActiveSheet();
+
+        $rows = $sheet->toArray(null, true, true, true);
+
+        $farmName = setting('farm.name', config('app.name', 'Farm ERP'));
+
+        $payroll = CasualPayroll::create([
+            'week_start' => Carbon::parse($data['week_start']),
+            'week_end' => Carbon::parse($data['week_end']),
+            'farm_name' => $farmName,
+            'work_site' => $data['work_site'] ?? null,
+            'uploaded_by' => auth()->id(),
+        ]);
+
+        $totalAmount = 0;
+        $totalDays = 0;
+        $imported = 0;
+
+        foreach ($rows as $rowNumber => $row) {
+            if ($rowNumber <= 6) {
+                continue;
+            }
+
+            $name = trim((string) ($row['A'] ?? ''));
+
+            if ($name === '') {
+                continue;
+            }
+
+            $sat = (float) ($row['F'] ?? 0);
+            $sun = (float) ($row['G'] ?? 0);
+            $mon = (float) ($row['H'] ?? 0);
+            $tue = (float) ($row['I'] ?? 0);
+            $wed = (float) ($row['J'] ?? 0);
+            $thu = (float) ($row['K'] ?? 0);
+            $fri = (float) ($row['L'] ?? 0);
+
+            $rowTotal = $sat + $sun + $mon + $tue + $wed + $thu + $fri;
+            $daysWorked = collect([$sat, $sun, $mon, $tue, $wed, $thu, $fri])
+                ->filter(fn ($amount) => $amount > 0)
+                ->count();
+
+            CasualPayrollItem::create([
+                'casual_payroll_id' => $payroll->id,
+                'casual_name' => $name,
+                'id_number' => trim((string) ($row['B'] ?? '')),
+                'phone_number' => trim((string) ($row['C'] ?? '')),
+                'designation' => trim((string) ($row['D'] ?? '')),
+                'work_site' => trim((string) ($row['E'] ?? ($data['work_site'] ?? ''))),
+                'sat_amount' => $sat,
+                'sun_amount' => $sun,
+                'mon_amount' => $mon,
+                'tue_amount' => $tue,
+                'wed_amount' => $wed,
+                'thu_amount' => $thu,
+                'fri_amount' => $fri,
+                'total_pay' => $rowTotal,
+                'days_worked' => $daysWorked,
+                'signature' => trim((string) ($row['O'] ?? '')),
+            ]);
+
+            $totalAmount += $rowTotal;
+            $totalDays += $daysWorked;
+            $imported++;
+        }
+
+        $payroll->update([
+            'total_amount' => $totalAmount,
+            'total_days' => $totalDays,
+        ]);
+
+        Notification::make()
+            ->title('Casual payroll uploaded')
+            ->body("Imported {$imported} casual payroll records. Total: KES " . number_format($totalAmount, 2))
+            ->success()
+            ->send();
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListCasualPayrolls::route('/'),
+            'view' => Pages\ViewCasualPayroll::route('/{record}'),
+            'edit' => Pages\EditCasualPayroll::route('/{record}/edit'),
+        ];
+    }
+}

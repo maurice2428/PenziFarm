@@ -1,0 +1,57 @@
+<?php
+
+namespace App\Filament\Pages\HR;
+
+use App\Models\HR\Payroll;
+use App\Models\HR\Payslip;
+use Filament\Forms;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+
+class GeneratePayslip extends Page implements HasForms
+{
+    use InteractsWithForms;
+
+    protected static ?string $navigationIcon = 'heroicon-o-document-arrow-down';
+    protected static ?string $navigationLabel = 'Generate Payslip';
+    protected static ?string $navigationGroup = 'HR';
+    protected static ?int $navigationSort = 12;
+    protected static string $view = 'filament.pages.hr.generate-payslip';
+
+    public ?int $payroll_id = null;
+
+    protected function getFormSchema(): array
+    {
+        return [
+            Forms\Components\Select::make('payroll_id')
+                ->label('Payroll Run')
+                ->options(Payroll::query()->orderByDesc('year')->orderByDesc('month')->pluck('id', 'id'))
+                ->required(),
+        ];
+    }
+
+    public function generate(): void
+    {
+        $payroll = Payroll::with('items')->findOrFail($this->payroll_id);
+
+        foreach ($payroll->items as $item) {
+            Payslip::updateOrCreate(
+                ['payroll_id' => $payroll->id, 'employee_id' => $item->employee_id],
+                [
+                    'pay_period_start' => $payroll->period_start,
+                    'pay_period_end' => $payroll->period_end,
+                    'gross_pay' => $item->gross_pay,
+                    'taxable_pay' => $item->taxable_pay,
+                    'paye' => $item->paye,
+                    'statutory_deductions' => $item->nssf + $item->sha + $item->housing_levy,
+                    'other_deductions' => $item->salary_advance_deduction + $item->other_deductions,
+                    'net_pay' => $item->net_pay,
+                ]
+            );
+        }
+
+        Notification::make()->success()->title('Payslips generated successfully.')->send();
+    }
+}

@@ -1,0 +1,1012 @@
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Clusters\Livestock\Animals as AnimalsCluster;
+use App\Filament\Resources\AnimalResource\Pages;
+use App\Filament\Support\LocationForm;
+use App\Models\Animal;
+use App\Models\AnimalWeight;
+use App\Models\Breed;
+use App\Models\Location;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
+use Filament\Forms\Form;
+use Filament\Forms\Components\Actions\Action as FormAction;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Support\Enums\MaxWidth;
+use Filament\Tables\Table;
+use Filament\Forms;
+use Filament\Tables;
+use Illuminate\Database\Eloquent\Collection;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
+
+class AnimalResource extends Resource
+{
+    protected static ?string $model = Animal::class;
+
+    protected static ?string $cluster = AnimalsCluster::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-archive-box';
+
+    protected static ?string $navigationLabel = 'Manage Animals';
+
+    protected static ?int $navigationSort = 10;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->can('view animals') ?? false;
+    }
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('view animals') ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->can('create animals') ?? false;
+    }
+
+    public static function canEdit($record): bool
+    {
+        return auth()->user()?->can('edit animals') ?? false;
+    }
+
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->can('delete animals') ?? false;
+    }
+
+    public static function form(Form $form): Form
+    {
+        return $form->schema([
+            Forms\Components\Section::make('Animal Identity')
+                ->schema([
+                    Forms\Components\Select::make('breed_id')
+                        ->label('Breed')
+                        ->options(
+                            Breed::query()
+                                ->orderBy('breed_name')
+                                ->pluck('breed_name', 'id')
+                                ->toArray()
+                        )
+                        ->searchable()
+                        ->preload()
+                        ->required()
+                        ->live()
+                        ->afterStateUpdated(function ($state, Forms\Set $set) {
+                            if (!$state) {
+                                $set('species', null);
+                                $set('sire_id', null);
+                                $set('dam_id', null);
+                                return;
+                            }
+
+                            $breed = Breed::find($state);
+                            $set('species', $breed?->parent_category);
+                            $set('sire_id', null);
+                            $set('dam_id', null);
+                        }),
+
+                    /*
+                     * Forms\Components\TextInput::make('manual_tag_number')
+                     *     ->label('Tag Number')
+                     *     ->required(fn(string $operation): bool => $operation === 'create')
+                     *     ->numeric()
+                     *     ->maxLength(10)
+                     *     ->placeholder('Example: 2072, 1150, 01')
+                     *     ->helperText('Type number only. System saves it as GNK2472.')
+                     *     ->dehydrated(fn(string $operation): bool => $operation === 'create')
+                     *     ->visible(fn(string $operation): bool => $operation === 'create'),
+                     *
+                     * Forms\Components\TextInput::make('manual_tag_number')
+                     *     ->label('Tag Number')
+                     *     ->required()
+                     *     ->numeric()
+                     *     ->maxLength(10)
+                     *     ->placeholder('Example: 2072, 1150, 01')
+                     *     ->helperText('Type number only. System saves it as GNK2472.')
+                     *     ->dehydrated(true)
+                     *     ->afterStateHydrated(function (Forms\Components\TextInput $component, $state, ?Animal $record) {
+                     *         if ($record?->tag_number) {
+                     *             $component->state(preg_replace('/\D/', '', $record->tag_number));
+                     *         }
+                     *     }),
+                     *
+                     * Forms\Components\TextInput::make('manual_tag_number')
+                     *     ->label('Tag Number')
+                     *     ->required()
+                     *     ->numeric()
+                     *     ->maxLength(10)
+                     *     ->placeholder('Example: 2072, 1150, 01')
+                     *     ->helperText('Type number only. System saves it as GNK2472.')
+                     *     ->dehydrated(true)
+                     *     ->afterStateHydrated(function (Forms\Components\TextInput $component, $state, ?Animal $record) {
+                     *         if ($record?->tag_number) {
+                     *             $component->state(preg_replace('/\D/', '', $record->tag_number));
+                     *         }
+                     *     })
+                     *     ->rules([
+                     *         function (Forms\Get $get, ?Animal $record) {
+                     *             return function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                     *                 $breedId = $get('breed_id');
+                     *
+                     *                 if (!$breedId || !$value) {
+                     *                     return;
+                     *                 }
+                     *
+                     *                 $tagNumber = 'GNK' . str_pad((string) $value, 4, '0', STR_PAD_LEFT);
+                     *
+                     *                 $exists = Animal::query()
+                     *                     ->where('breed_id', $breedId)
+                     *                     ->where('tag_number', $tagNumber)
+                     *                     ->when($record, fn($query) => $query->whereKeyNot($record->id))
+                     *                     ->exists();
+                     *
+                     *                 if ($exists) {
+                     *                     $fail('This tag number already exists for this breed.');
+                     *                 }
+                     *             };
+                     *         },
+                     *     ]),WORKING
+                     */
+                    Forms\Components\TextInput::make('manual_tag_number')
+                        ->label('Tag Number')
+                        ->required()
+                        ->maxLength(50)
+                        ->placeholder('Example: GNK2072 or REGARD etc')
+                        ->helperText('You may enter a normal tag number or a name-based tag. The system will save it cleanly in uppercase.')
+                        ->dehydrated(true)
+                        ->afterStateHydrated(function (Forms\Components\TextInput $component, $state, ?Animal $record) {
+                            if ($record?->tag_number) {
+                                $component->state($record->tag_number);
+                            }
+                        })
+                        ->rules([
+                            function (Forms\Get $get, ?Animal $record) {
+                                return function (string $attribute, $value, \Closure $fail) use ($get, $record) {
+                                    $breedId = $get('breed_id');
+
+                                    if (!$breedId || blank($value)) {
+                                        return;
+                                    }
+
+                                    $rawTag = strtoupper(trim((string) $value));
+
+                                    $tagNumber = is_numeric($rawTag)
+                                        ? 'GNK' . str_pad($rawTag, 4, '0', STR_PAD_LEFT)
+                                        : $rawTag;
+
+                                    $exists = Animal::query()
+                                        ->where('breed_id', $breedId)
+                                        ->where('tag_number', $tagNumber)
+                                        ->when($record, fn($query) => $query->whereKeyNot($record->id))
+                                        ->exists();
+
+                                    if ($exists) {
+                                        $fail('This tag number already exists for this breed.');
+                                    }
+                                };
+                            },
+                        ]),
+                    Forms\Components\TextInput::make('species')
+                        ->disabled()
+                        ->dehydrated()
+                        ->required(),
+                    Forms\Components\Select::make('sex')
+                        ->options([
+                            'Male' => 'Male',
+                            'Female' => 'Female',
+                        ])
+                        ->required(),
+                    Forms\Components\DatePicker::make('date_of_birth')
+                        ->live()
+                        ->afterStateUpdated(function ($state, Forms\Set $set) {
+                            $set('sire_id', null);
+                            $set('dam_id', null);
+                        }),
+                    Forms\Components\Toggle::make('date_of_birth_is_estimated')
+                        ->label('Estimated Date of Birth')
+                        ->default(false),
+                ])
+                ->columns(2),
+            Forms\Components\Section::make('Animal Classification')
+                ->schema([
+                    Forms\Components\Select::make('source')
+                        ->options([
+                            'Born on farm' => 'Born on farm',
+                            'Purchased' => 'Purchased',
+                        ])
+                        ->default('Born on farm')
+                        ->required()
+                        ->live(),
+                    Forms\Components\Select::make('purpose')
+                        ->options([
+                            'Breeding' => 'Breeding',
+                            'Sale' => 'Sale',
+                            'Dairy' => 'Dairy',
+                            'Production' => 'Production',
+                        ])
+                        ->default('Sale')
+                        ->required()
+                        ->live()
+                        ->afterStateUpdated(function ($state, Forms\Set $set) {
+                            if ($state === 'Breeding') {
+                                $set('is_breeder', true);
+                                $set('sale_ready', false);
+                            }
+                        }),
+                    Forms\Components\Toggle::make('is_breeder')
+                        ->label('Retained for Breeding')
+                        ->default(false)
+                        ->live()
+                        ->afterStateUpdated(function ($state, Forms\Set $set) {
+                            if ($state) {
+                                $set('sale_ready', false);
+                            }
+                        }),
+                    Forms\Components\Toggle::make('sale_ready')
+                        ->label('Ready for Sale')
+                        ->default(false)
+                        ->live()
+                        ->afterStateUpdated(function ($state, Forms\Set $set) {
+                            if ($state) {
+                                $set('is_breeder', false);
+                            }
+                        }),
+                    Forms\Components\Select::make('status')
+                        ->options([
+                            'Active' => 'Active',
+                            'Sold' => 'Sold',
+                            'Dead' => 'Dead',
+                            'Culled' => 'Culled',
+                        ])
+                        ->default('Active')
+                        ->required()
+                        ->live(),
+                    Forms\Components\TextInput::make('valuation_price')
+                        ->numeric()
+                        ->prefix('KES'),
+                ])
+                ->columns(2),
+            Forms\Components\Section::make('Death Details')
+                ->schema([
+                    Forms\Components\DatePicker::make('date_died')
+                        ->label('Date Died')
+                        ->required(fn(Forms\Get $get): bool => $get('status') === 'Dead'),
+                    Forms\Components\TextInput::make('cause_of_death')
+                        ->label('Cause of Death')
+                        ->required(fn(Forms\Get $get): bool => $get('status') === 'Dead')
+                        ->maxLength(255),
+                    Forms\Components\Textarea::make('death_comments')
+                        ->label('Comments')
+                        ->rows(3)
+                        ->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->visible(fn(Forms\Get $get): bool => $get('status') === 'Dead'),
+            Forms\Components\Section::make('Culling Details')
+                ->schema([
+                    Forms\Components\DatePicker::make('date_culled')
+                        ->label('Date Culled')
+                        ->required(fn(Forms\Get $get): bool => $get('status') === 'Culled'),
+                    Forms\Components\TextInput::make('culling_reason')
+                        ->label('Reason for Culling')
+                        ->required(fn(Forms\Get $get): bool => $get('status') === 'Culled')
+                        ->maxLength(255),
+                    Forms\Components\Textarea::make('culling_comments')
+                        ->label('Comments')
+                        ->rows(3)
+                        ->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->visible(fn(Forms\Get $get): bool => $get('status') === 'Culled'),
+            Forms\Components\Section::make('Purchase Details')
+                ->schema([
+                    Forms\Components\DatePicker::make('bought_on')
+                        ->label('Bought On'),
+                    Forms\Components\TextInput::make('bought_from')
+                        ->label('Bought From')
+                        ->maxLength(255),
+                    Forms\Components\TextInput::make('seller_phone')
+                        ->label('Seller Phone')
+                        ->maxLength(50),
+                    Forms\Components\TextInput::make('seller_email')
+                        ->label('Seller Email')
+                        ->email()
+                        ->maxLength(255),
+                    Forms\Components\TextInput::make('purchase_price')
+                        ->label('Purchase Price')
+                        ->numeric()
+                        ->prefix('KES'),
+                    Forms\Components\Textarea::make('seller_address')
+                        ->label('Seller Address')
+                        ->rows(3)
+                        ->columnSpanFull(),
+                    Forms\Components\Textarea::make('purchase_notes')
+                        ->label('Purchase Notes')
+                        ->rows(3)
+                        ->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->visible(fn(callable $get) => $get('source') === 'Purchased'),
+            Forms\Components\Section::make('Lineage & Location')
+                ->schema([
+                    Forms\Components\Select::make('sire_id')
+                        ->label('Sire (Father)')
+                        ->options(function (callable $get) {
+                            $breedId = $get('breed_id');
+                            $dob = $get('date_of_birth');
+
+                            $query = Animal::query()
+                                ->where('sex', 'Male')
+                                ->where('status', 'Active')
+                                ->where('is_archived', false)
+                                ->whereNotNull('date_of_birth');
+
+                            if ($breedId) {
+                                $query->where('breed_id', $breedId);
+                            }
+
+                            $cutoffDate = $dob
+                                ? Carbon::parse($dob)->subYear()->toDateString()
+                                : now()->subYear()->toDateString();
+
+                            $query->whereDate('date_of_birth', '<=', $cutoffDate);
+
+                            return $query
+                                ->orderBy('tag_number')
+                                ->pluck('tag_number', 'id')
+                                ->toArray();
+                        })
+                        ->searchable()
+                        ->preload()
+                        ->helperText('Only active males of the same breed, at least 1 year older.'),
+                    Forms\Components\Select::make('dam_id')
+                        ->label('Dam (Mother)')
+                        ->options(function (callable $get) {
+                            $breedId = $get('breed_id');
+                            $dob = $get('date_of_birth');
+
+                            $query = Animal::query()
+                                ->where('sex', 'Female')
+                                ->where('status', 'Active')
+                                ->where('is_archived', false)
+                                ->whereNotNull('date_of_birth');
+
+                            if ($breedId) {
+                                $query->where('breed_id', $breedId);
+                            }
+
+                            $cutoffDate = $dob
+                                ? Carbon::parse($dob)->subYear()->toDateString()
+                                : now()->subYear()->toDateString();
+
+                            $query->whereDate('date_of_birth', '<=', $cutoffDate);
+
+                            return $query
+                                ->orderBy('tag_number')
+                                ->pluck('tag_number', 'id')
+                                ->toArray();
+                        })
+                        ->searchable()
+                        ->preload()
+                        ->helperText('Only active females of the same breed, at least 1 year older.'),
+                    Forms\Components\Select::make('current_location_id')
+                        ->label('Current Location')
+                        ->relationship(
+                            name: 'location',
+                            titleAttribute: 'name',
+                            modifyQueryUsing: fn (\Illuminate\Database\Eloquent\Builder $query) => $query
+                                ->where('is_active', true)
+                                ->orderByDesc('is_default')
+                                ->orderBy('name')
+                        )
+                        ->getOptionLabelFromRecordUsing(
+                            fn (Location $location): string => $location->display_name
+                        )
+                        ->default(fn (): ?int => Location::query()
+                            ->where('is_active', true)
+                            ->where('is_default', true)
+                            ->value('id'))
+                        ->searchable()
+                        ->preload()
+                        ->live()
+                        ->required()
+                        ->helperText('Defaults to Muserechi. Add a station without leaving this animal form, or refresh after another user creates one.')
+                        ->hintAction(
+                            FormAction::make('refreshLocations')
+                                ->label('Refresh')
+                                ->icon('heroicon-m-arrow-path')
+                                ->color('gray')
+                                ->tooltip('Refresh active location options')
+                                ->action(function (Forms\Get $get, Forms\Set $set): void {
+                                    $set('current_location_id', $get('current_location_id'));
+
+                                    Notification::make()
+                                        ->title('Location options refreshed')
+                                        ->success()
+                                        ->send();
+                                })
+                        )
+                        ->createOptionForm(LocationForm::schema())
+                        ->createOptionUsing(function (array $data): int {
+                            unset($data['map_picker']);
+
+                            $data['created_by'] = auth()->id();
+                            $data['updated_by'] = auth()->id();
+                            $data['is_active'] = $data['is_active'] ?? true;
+
+                            return Location::create($data)->getKey();
+                        })
+                        ->createOptionAction(
+                            fn (FormAction $action): FormAction => $action
+                                ->slideOver()
+                                ->stickyModalHeader()
+                                ->stickyModalFooter()
+                                ->modalWidth(MaxWidth::ThreeExtraLarge)
+                                ->extraModalWindowAttributes([
+                                    'class' => 'lelekwe-location-slide-over',
+                                ])
+                                ->modalHeading('Add Animal Location')
+                                ->modalDescription('Create a farm station, paddock, shed or pen. The panel opens from the right and can be scrolled while completing the map and address details.')
+                                ->modalSubmitActionLabel('Save Location')
+                                ->modalCancelActionLabel('Cancel')
+                        ),
+                    Forms\Components\Textarea::make('notes')
+                        ->rows(4)
+                        ->columnSpanFull(),
+                ])
+                ->columns(2),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return static::getAnimalTable($table, archivedView: false);
+    }
+
+    public static function getRelations(): array
+    {
+        return [];
+    }
+
+    public static function getAnimalTable(Table $table, bool $archivedView = false): Table
+    {
+        $table = $table
+            ->recordUrl(fn(Animal $record): string => static::getUrl('edit', ['record' => $record]))
+            ->columns([
+                Tables\Columns\TextColumn::make('tag_number')
+                    ->label('Tag')
+                    ->searchable()
+                    ->sortable()
+                    ->weight('bold'),
+                Tables\Columns\TextColumn::make('current_weight')
+                    ->label('Weight')
+                    ->badge()
+                    ->icon(fn(Animal $record) => match (self::getLatestWeightTrend($record)) {
+                        'gaining' => 'heroicon-o-arrow-trending-up',
+                        'losing' => 'heroicon-o-arrow-trending-down',
+                        'stable' => 'heroicon-o-minus',
+                        'first' => 'heroicon-o-scale',
+                        default => 'heroicon-o-scale',
+                    })
+                    ->color(fn(Animal $record) => match (self::getLatestWeightTrend($record)) {
+                        'gaining' => 'success',
+                        'losing' => 'danger',
+                        'stable' => 'warning',
+                        'first' => 'info',
+                        default => 'gray',
+                    })
+                    ->state(function (Animal $record): string {
+                        $weight = self::getLatestWeight($record);
+
+                        if (!$weight) {
+                            return 'No Weight';
+                        }
+
+                        return number_format((float) $weight->weight_kg, 2) . ' KG';
+                    })
+                    /*->description(function (Animal $record): ?string {
+                        $weight = self::getLatestWeight($record);
+
+                        if (!$weight) {
+                            return null;
+                        }
+
+                        return match ($weight->trend) {
+                            'gaining' => 'Gaining',
+                            'losing' => 'Losing',
+                            'stable' => 'Stable',
+                            default => 'First Entry',
+                        };
+                    })*/
+                    ->url(function (Animal $record): ?string {
+                        $weight = self::getLatestWeight($record);
+
+                        if (!$weight) {
+                            return null;
+                        }
+
+                        return AnimalWeightResource::getUrl('view', [
+                            'record' => $weight->id,
+                        ]);
+                    })
+                    ->openUrlInNewTab()
+                    ->tooltip('Click to view weight history')
+                    ->sortable(false),
+                Tables\Columns\TextColumn::make('breed.breed_name')
+                    ->label('Breed')
+                    ->searchable()
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('species')
+                    ->sortable(),
+                /* Tables\Columns\TextColumn::make('sex')
+                     ->badge(),
+                 Tables\Columns\TextColumn::make('purpose')
+                     ->badge(),*/
+                Tables\Columns\TextColumn::make('sex')
+                    ->badge(),
+                Tables\Columns\TextColumn::make('age_display')
+                    ->label('Age')
+                    ->state(function (Animal $record): string {
+                        if (blank($record->date_of_birth)) {
+                            return '-';
+                        }
+
+                        $dob = Carbon::parse($record->date_of_birth);
+
+                        if ($dob->isFuture()) {
+                            return 'Invalid DOB';
+                        }
+
+                        $age = $dob->diffForHumans(now(), [
+                            'parts' => 2,
+                            'syntax' => \Carbon\CarbonInterface::DIFF_ABSOLUTE,
+                        ]);
+
+                        return (bool) $record->date_of_birth_is_estimated
+                            ? 'Approx. ' . $age
+                            : $age;
+                    })
+                    ->badge()
+                    ->color(function (Animal $record): string {
+                        if (blank($record->date_of_birth)) {
+                            return 'gray';
+                        }
+
+                        if (Carbon::parse($record->date_of_birth)->isFuture()) {
+                            return 'danger';
+                        }
+
+                        return (bool) $record->date_of_birth_is_estimated
+                            ? 'warning'
+                            : 'success';
+                    })
+                    ->toggleable()
+                    ->sortable(false),
+                Tables\Columns\TextColumn::make('purpose')
+                    ->badge(),
+                Tables\Columns\IconColumn::make('is_breeder')
+                    ->label('Breeder')
+                    ->boolean(),
+                Tables\Columns\IconColumn::make('sale_ready')
+                    ->label('Sale Ready')
+                    ->boolean(),
+                Tables\Columns\TextColumn::make('status')
+                    ->badge(),
+                // 🔻 HIDDEN BY DEFAULT
+                Tables\Columns\IconColumn::make('is_archived')
+                    ->label('Archived')
+                    ->boolean()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('location.name')
+                    ->label('Location')
+                    ->default('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('source')
+                    ->label('Source')
+                    ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('valuation_price')
+                    ->label('Valuation')
+                    ->money('KES')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Created At')
+                    ->dateTime('d M Y H:i')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('species')
+                    ->options([
+                        'Sheep' => 'Sheep',
+                        'Goat' => 'Goat',
+                        'Cattle' => 'Cattle',
+                        'Poultry' => 'Poultry',
+                    ]),
+                Tables\Filters\SelectFilter::make('status')
+                    ->options([
+                        'Active' => 'Active',
+                        'Sold' => 'Sold',
+                        'Dead' => 'Dead',
+                        'Culled' => 'Culled',
+                    ]),
+                Tables\Filters\TernaryFilter::make('is_breeder')->label('Breeder'),
+                Tables\Filters\TernaryFilter::make('sale_ready')->label('Sale Ready'),
+                Tables\Filters\TernaryFilter::make('is_archived')->label('Archived'),
+                Tables\Filters\SelectFilter::make('weight_trend')
+                    ->label('Weight Trend')
+                    ->options([
+                        'gaining' => 'Gaining Weight',
+                        'losing' => 'Losing Weight',
+                        'stable' => 'Stable Weight',
+                        'no_weight' => 'No Weight Record',
+                    ])
+                    ->query(function ($query, array $data) {
+                        $value = $data['value'] ?? null;
+
+                        if (!$value) {
+                            return $query;
+                        }
+
+                        if ($value === 'no_weight') {
+                            return $query->whereDoesntHave('weights');
+                        }
+
+                        return $query->whereHas('weights', function ($weightQuery) use ($value) {
+                            $weightQuery
+                                ->whereNull('deleted_at')
+                                ->whereIn('id', function ($subQuery) {
+                                    $subQuery
+                                        ->selectRaw('MAX(id)')
+                                        ->from('animal_weights')
+                                        ->whereNull('deleted_at')
+                                        ->groupBy('animal_id');
+                                });
+
+                            if ($value === 'gaining') {
+                                $weightQuery->whereRaw('
+                    weight_kg >
+                    (
+                        SELECT aw2.weight_kg
+                        FROM animal_weights aw2
+                        WHERE aw2.animal_id = animal_weights.animal_id
+                        AND aw2.recorded_at < animal_weights.recorded_at
+                        AND aw2.deleted_at IS NULL
+                        ORDER BY aw2.recorded_at DESC
+                        LIMIT 1
+                    )
+                ');
+                            } elseif ($value === 'losing') {
+                                $weightQuery->whereRaw('
+                    weight_kg <
+                    (
+                        SELECT aw2.weight_kg
+                        FROM animal_weights aw2
+                        WHERE aw2.animal_id = animal_weights.animal_id
+                        AND aw2.recorded_at < animal_weights.recorded_at
+                        AND aw2.deleted_at IS NULL
+                        ORDER BY aw2.recorded_at DESC
+                        LIMIT 1
+                    )
+                ');
+                            } elseif ($value === 'stable') {
+                                $weightQuery->whereRaw('
+                    weight_kg =
+                    (
+                        SELECT aw2.weight_kg
+                        FROM animal_weights aw2
+                        WHERE aw2.animal_id = animal_weights.animal_id
+                        AND aw2.recorded_at < animal_weights.recorded_at
+                        AND aw2.deleted_at IS NULL
+                        ORDER BY aw2.recorded_at DESC
+                        LIMIT 1
+                    )
+                ');
+                            }
+                        });
+                    }),
+            ])
+            ->actions([
+                Tables\Actions\Action::make('archive')
+                    ->label('Archive')
+                    ->icon('heroicon-o-archive-box')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->visible(fn(Animal $record) =>
+                        auth()->user()?->can('archive animals') &&
+                        !$archivedView &&
+                        !$record->is_archived)
+                    ->action(function (Animal $record, $livewire) {
+                        // $record->update(['is_archived' => true]);
+                        app(\App\Services\Audit\AuditLogService::class)->logAction(
+                            event: 'archived',
+                            module: 'Livestock',
+                            description: 'Archived animal: ' . $record->tag_number,
+                            auditable: $record,
+                            metadata: [
+                                'animal_id' => $record->id,
+                                'tag_number' => $record->tag_number,
+                            ],
+                            severity: 'warning',
+                        );
+
+                        Notification::make()
+                            ->success()
+                            ->title('Animal archived successfully.')
+                            ->send();
+
+                        $livewire->redirect(request()->header('Referer') ?? url()->previous(), navigate: true);
+                    }),
+                Tables\Actions\Action::make('restore')
+                    ->label('Restore')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->visible(fn(Animal $record) =>
+                        auth()->user()?->can('restore animals') &&
+                        $archivedView &&
+                        $record->is_archived)
+                    ->action(function (Animal $record, $livewire) {
+                        // $record->update(['is_archived' => false]);
+                        app(\App\Services\Audit\AuditLogService::class)->logAction(
+                            event: 'restored',
+                            module: 'Livestock',
+                            description: 'Restored animal: ' . $record->tag_number,
+                            auditable: $record,
+                            metadata: [
+                                'animal_id' => $record->id,
+                                'tag_number' => $record->tag_number,
+                            ],
+                            severity: 'success',
+                        );
+
+                        Notification::make()
+                            ->success()
+                            ->title('Animal restored successfully.')
+                            ->send();
+
+                        $livewire->redirect(request()->header('Referer') ?? url()->previous(), navigate: true);
+                    }),
+                Tables\Actions\DeleteAction::make()
+                    ->visible(fn() => auth()->user()?->can('delete animals') ?? false)
+            ])
+            ->defaultSort('created_at', 'desc');
+        if ($archivedView) {
+            return $table->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\BulkAction::make('restore_animals')
+                        ->label('Restore Selected')
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->visible(fn() => auth()->user()?->can('restore animals'))
+                        ->action(function (Collection $records, $livewire) {
+                            /* Animal::query()
+                                 ->whereIn('id', $records->pluck('id'))
+                                 ->update(['is_archived' => false]);*/
+                            $animalIds = $records->pluck('id')->values();
+                            $tagNumbers = $records->pluck('tag_number')->values();
+
+                            Animal::query()
+                                ->whereIn('id', $animalIds)
+                                ->update(['is_archived' => false]);
+
+                            app(\App\Services\Audit\AuditLogService::class)->logAction(
+                                event: 'restored',
+                                module: 'Livestock',
+                                description: 'Restored ' . $records->count() . ' selected animal record(s).',
+                                metadata: [
+                                    'animal_ids' => $animalIds->all(),
+                                    'tag_numbers' => $tagNumbers->all(),
+                                    'action_type' => 'bulk_restore',
+                                ],
+                                severity: 'success',
+                            );
+
+                            Notification::make()
+                                ->success()
+                                ->title('Selected animals restored successfully.')
+                                ->send();
+
+                            $livewire->redirect(request()->header('Referer') ?? url()->previous(), navigate: true);
+                        }),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn() => auth()->user()?->can('delete animals') ?? false)
+                ])->label('Bulk Actions'),
+            ]);
+        }
+
+        return $table->bulkActions([
+            Tables\Actions\BulkActionGroup::make([
+                Tables\Actions\BulkAction::make('archive_animals')
+                    ->label('Archive Selected')
+                    ->icon('heroicon-o-archive-box')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->deselectRecordsAfterCompletion()
+                    ->action(function (Collection $records, $livewire) {
+                        /* Animal::query()
+                             ->whereIn('id', $records->pluck('id'))
+                             ->update(['is_archived' => true]);*/
+                        $animalIds = $records->pluck('id')->values();
+                        $tagNumbers = $records->pluck('tag_number')->values();
+
+                        Animal::query()
+                            ->whereIn('id', $animalIds)
+                            ->update(['is_archived' => true]);
+
+                        app(\App\Services\Audit\AuditLogService::class)->logAction(
+                            event: 'archived',
+                            module: 'Livestock',
+                            description: 'Archived ' . $records->count() . ' selected animal record(s).',
+                            metadata: [
+                                'animal_ids' => $animalIds->all(),
+                                'tag_numbers' => $tagNumbers->all(),
+                                'action_type' => 'bulk_archive',
+                            ],
+                            severity: 'warning',
+                        );
+
+                        Notification::make()
+                            ->success()
+                            ->title('Selected animals archived successfully.')
+                            ->send();
+
+                        $livewire->redirect(request()->header('Referer') ?? url()->previous(), navigate: true);
+                    }),
+                Tables\Actions\BulkAction::make('printAnimalsPdf')
+                    ->label('Print PDF')
+                    ->icon('heroicon-o-printer')
+                    ->color('success')
+                    ->deselectRecordsAfterCompletion()
+                    ->visible(fn() => auth()->user()?->can('export animals'))
+                    ->action(function (Collection $records) {
+                        if ($records->isEmpty()) {
+                            Notification::make()
+                                ->warning()
+                                ->title('No animals selected.')
+                                ->send();
+
+                            return null;
+                        }
+
+                        ini_set('max_execution_time', '900');
+                        ini_set('memory_limit', '2048M');
+                        set_time_limit(900);
+
+                        $user = auth()->user();
+                        $generatedByRole = $user?->getRoleNames()?->first() ?? 'User';
+                        $farmName = setting('farm.name', 'Lelekwe Farms');
+                        $now = now('Africa/Nairobi');
+
+                        $recordCount = $records->count();
+                        $largeReportMode = $recordCount >= 300;
+
+                        $verificationText = $farmName . ' Animal Report | Generated by: ' . ($user?->name ?? 'System')
+                            . ' (' . $generatedByRole . ') | Date: ' . $now->format('Y-m-d H:i:s') . ' EAT'
+                            . ' | Total Records: ' . $recordCount;
+
+                        $qrImage = null;
+
+                        if (!$largeReportMode) {
+                            try {
+                                $qrImage = 'data:image/png;base64,' . base64_encode(
+                                    QrCode::format('png')
+                                        ->size(120)
+                                        ->margin(1)
+                                        ->generate($verificationText)
+                                );
+                            } catch (\Throwable $e) {
+                                $qrImage = null;
+                            }
+                        }
+
+                        $animals = \App\Models\Animal::query()
+                            ->with([
+                                'breed',
+                                'location',
+                                'latestWeight',
+                            ])
+                            ->whereIn('id', $records->pluck('id')->all())
+                            ->orderBy('tag_number')
+                            ->get();
+
+                        /*$pdf = Pdf::loadView('pdf.animals-bulk-report', [
+                            'animals' => $animals,
+                            'generatedBy' => $user,
+                            'generatedByRole' => $generatedByRole,
+                            'verificationText' => $verificationText,
+                            'qrImage' => $qrImage,
+                            'largeReportMode' => $largeReportMode,
+                        ])
+                            ->setPaper('a4', 'landscape')
+                            ->setOptions([
+                                'isHtml5ParserEnabled' => true,
+                                'isRemoteEnabled' => false,
+                                'dpi' => $largeReportMode ? 72 : 96,
+                                'defaultFont' => 'Courier',
+                                'enable_php' => true,
+                            ]);
+
+                        return response()->streamDownload(
+                            fn() => print ($pdf->output()),
+                            'animal-bulk-report-' . now('Africa/Nairobi')->format('Ymd_His') . '.pdf'
+                        );*/
+                        $pdf = Pdf::loadView('pdf.animals-bulk-report', [
+                            'animals' => $animals,
+                            'generatedBy' => $user,
+                            'generatedByRole' => $generatedByRole,
+                            'verificationText' => $verificationText,
+                            'qrImage' => $qrImage,
+                            'largeReportMode' => $largeReportMode,
+                        ])
+                            ->setPaper('a4', 'landscape')
+                            ->setOptions([
+                                'isHtml5ParserEnabled' => true,
+                                'isRemoteEnabled' => false,
+                                'dpi' => $largeReportMode ? 72 : 96,
+                                'defaultFont' => 'Courier',
+                                'enable_php' => true,
+                            ]);
+
+                        app(\App\Services\Audit\AuditLogService::class)->logPrinted(
+                            module: 'Livestock',
+                            description: 'Printed animal bulk report with ' . $animals->count() . ' selected animal record(s).',
+                            metadata: [
+                                'report' => 'Animal Bulk Report',
+                                'record_count' => $animals->count(),
+                                'animal_ids' => $animals->pluck('id')->values()->all(),
+                                'tag_numbers' => $animals->pluck('tag_number')->values()->all(),
+                                'generated_by' => $user?->name,
+                                'generated_by_email' => $user?->email,
+                            ],
+                        );
+
+                        return response()->streamDownload(
+                            fn() => print ($pdf->output()),
+                            'animal-bulk-report-' . now('Africa/Nairobi')->format('Ymd_His') . '.pdf'
+                        );
+                    }),
+                Tables\Actions\DeleteBulkAction::make()
+                    ->visible(fn() => auth()->user()?->can('delete animals') ?? false)
+            ])->label('Bulk Actions'),
+        ]);
+    }
+
+    protected static function getLatestWeight(Animal $animal): ?AnimalWeight
+    {
+        return AnimalWeight::query()
+            ->where('animal_id', $animal->id)
+            ->whereNull('deleted_at')
+            ->latest('recorded_at')
+            ->latest('id')
+            ->first();
+    }
+
+    protected static function getLatestWeightTrend(Animal $animal): string
+    {
+        $weight = self::getLatestWeight($animal);
+
+        return $weight?->trend ?? 'none';
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListAnimals::route('/'),
+            'create' => Pages\CreateAnimal::route('/create'),
+            'edit' => Pages\EditAnimal::route('/{record}/edit'),
+        ];
+    }
+}
