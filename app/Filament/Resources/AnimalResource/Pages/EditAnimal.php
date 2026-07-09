@@ -4,12 +4,16 @@ namespace App\Filament\Resources\AnimalResource\Pages;
 
 use App\Filament\Resources\AnimalResource;
 use App\Models\Animal;
+use App\Models\AnimalTagCorrection;
 use App\Models\Breed;
+use App\Services\AnimalTagGeneratorService;
 use App\Services\BreedPurityService;
 use Carbon\Carbon;
-use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Actions;
+use Filament\Forms;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class EditAnimal extends EditRecord
@@ -27,37 +31,49 @@ class EditAnimal extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        $breed = Breed::findOrFail($data['breed_id']);
-
         /*
-        |--------------------------------------------------------------------------
-        | Keep Existing Penzi Tag Immutable
-        |--------------------------------------------------------------------------
-        |
-        | Tag number and sequence are generated when an animal is created.
-        | They must not be edited from this page.
-        |
-        */
+         * |--------------------------------------------------------------------------
+         * | Immutable Animal Identity
+         * |--------------------------------------------------------------------------
+         * |
+         * | Breed, date of birth, tag number and tag sequence are protected during
+         * | normal editing. They can only be changed through the Administrator-only
+         * | Correct Animal Identity action.
+         * |
+         */
+        $breed = Breed::query()->findOrFail($this->record->breed_id);
+
+        $validationData = array_merge($data, [
+            'breed_id' => $breed->id,
+            'species' => $breed->parent_category,
+            'purity_breed_id' => $this->record->purity_breed_id ?: $breed->id,
+            'date_of_birth' => $this->record->date_of_birth,
+            'date_of_birth_is_estimated' => $this->record->date_of_birth_is_estimated,
+        ]);
+
+        $this->validatePurityBreed($validationData, $breed);
+        $this->validateLineage($validationData);
+
         unset(
             $data['manual_tag_number'],
             $data['tag_number'],
             $data['tag_sequence'],
+            $data['breed_id'],
+            $data['species'],
+            $data['date_of_birth'],
+            $data['date_of_birth_is_estimated'],
+            $data['purity_breed_id'],
             $data['penzi_tag_preview'],
-            $data['purity_preview']
+            $data['purity_preview'],
         );
 
-        $data['species'] = $breed->parent_category;
-        $data['purity_breed_id'] = $breed->id;
         $data['updated_by'] = auth()->id();
 
-        $this->validatePurityBreed($data, $breed);
-        $this->validateLineage($data);
-
         /*
-        |--------------------------------------------------------------------------
-        | Breeding / Sale Controls
-        |--------------------------------------------------------------------------
-        */
+         * |--------------------------------------------------------------------------
+         * | Breeding / Sale Controls
+         * |--------------------------------------------------------------------------
+         */
         if (($data['purpose'] ?? null) === 'Breeding') {
             $data['is_breeder'] = true;
             $data['sale_ready'] = false;
@@ -72,10 +88,10 @@ class EditAnimal extends EditRecord
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Purchase Data
-        |--------------------------------------------------------------------------
-        */
+         * |--------------------------------------------------------------------------
+         * | Purchase Data
+         * |--------------------------------------------------------------------------
+         */
         if (($data['source'] ?? null) !== 'Purchased') {
             $data['bought_on'] = null;
             $data['bought_from'] = null;
@@ -87,10 +103,10 @@ class EditAnimal extends EditRecord
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Death / Culling Data
-        |--------------------------------------------------------------------------
-        */
+         * |--------------------------------------------------------------------------
+         * | Death / Culling Data
+         * |--------------------------------------------------------------------------
+         */
         if (($data['status'] ?? null) !== 'Dead') {
             $data['date_died'] = null;
             $data['cause_of_death'] = null;
@@ -104,10 +120,10 @@ class EditAnimal extends EditRecord
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Breed Purity Rules
-        |--------------------------------------------------------------------------
-        */
+         * |--------------------------------------------------------------------------
+         * | Breed Purity Rules
+         * |--------------------------------------------------------------------------
+         */
         if (($data['is_foundation_animal'] ?? false) === true) {
             $data['purity_status'] = 'foundation';
             $data['purity_override_percent'] = null;
@@ -130,14 +146,14 @@ class EditAnimal extends EditRecord
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Sold Animal Flow
-        |--------------------------------------------------------------------------
-        |
-        | Keep the animal Active temporarily so it can be selected on the
-        | sales invoice. The invoice flow updates the final Sold status.
-        |
-        */
+         * |--------------------------------------------------------------------------
+         * | Sold Animal Flow
+         * |--------------------------------------------------------------------------
+         * |
+         * | Keep the animal Active temporarily so it can be selected on the sales
+         * | invoice. The invoice workflow changes the final status to Sold.
+         * |
+         */
         if (($data['status'] ?? null) === 'Sold') {
             $this->redirectToInvoice = true;
 
@@ -190,9 +206,187 @@ class EditAnimal extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('correctAnimalIdentity')
+                ->label('Correct Animal Identity')
+                ->icon('heroicon-o-shield-exclamation')
+                ->color('warning')
+                ->visible(
+                    fn(): bool =>
+                        auth()->user()?->hasRole('Administrator') ?? false
+                )
+                ->modalHeading('Correct Animal Identity')
+                ->modalDescription(
+                    'Use only when the breed, date of birth, or issued tag is incorrect. '
+                    . 'The old tag is permanently retired and every correction is recorded.'
+                )
+                ->modalSubmitActionLabel('Apply Correction')
+                ->form([
+                    Forms\Components\Placeholder::make('current_tag')
+                        ->label('Current Permanent Tag')
+                        ->content(fn(): string => $this->record->tag_number),
+                    Forms\Components\Select::make('breed_id')
+                        ->label('Correct Breed')
+                        ->options(
+                            Breed::query()
+                                ->orderBy('parent_category')
+                                ->orderBy('breed_name')
+                                ->pluck('breed_name', 'id')
+                                ->all()
+                        )
+                        ->default(fn(): ?int => $this->record->breed_id)
+                        ->searchable()
+                        ->preload()
+                        ->required(),
+                    Forms\Components\DatePicker::make('date_of_birth')
+                        ->label('Correct Date of Birth')
+                        ->default(fn() => $this->record->date_of_birth)
+                        ->maxDate(today())
+                        ->required(),
+                    Forms\Components\Toggle::make('date_of_birth_is_estimated')
+                        ->label('Estimated Date of Birth')
+                        ->default(
+                            fn(): bool =>
+                                (bool) $this->record->date_of_birth_is_estimated
+                        ),
+                    Forms\Components\Select::make('correction_mode')
+                        ->label('Tag Correction Method')
+                        ->options([
+                            'keep_tag' =>
+                                'Keep existing tag — breed and birth year must remain unchanged',
+                            'issue_next_tag' =>
+                                'Retire existing tag and issue the next sequence',
+                        ])
+                        ->default('keep_tag')
+                        ->helperText(
+                            'Choose “issue next tag” for an erroneous physical or recorded tag. '
+                            . 'Issued sequence numbers are never reused.'
+                        )
+                        ->required(),
+                    Forms\Components\Textarea::make('reason')
+                        ->label('Correction Reason')
+                        ->placeholder(
+                            'Explain what was incorrect and how the correction was verified.'
+                        )
+                        ->rows(4)
+                        ->required()
+                        ->minLength(10),
+                ])
+                ->action(function (array $data): void {
+                    DB::transaction(function () use ($data): void {
+                        $animal = Animal::query()
+                            ->whereKey($this->record->getKey())
+                            ->lockForUpdate()
+                            ->firstOrFail();
+
+                        $newBreed = Breed::query()
+                            ->findOrFail($data['breed_id']);
+
+                        $oldBirthDate = $animal->date_of_birth
+                            ? Carbon::parse($animal->date_of_birth)
+                            : null;
+
+                        $newBirthDate = Carbon::parse($data['date_of_birth']);
+
+                        $breedChanged =
+                            (int) $animal->breed_id !== (int) $newBreed->id;
+
+                        $birthYearChanged =
+                            !$oldBirthDate ||
+                            $oldBirthDate->year !== $newBirthDate->year;
+
+                        if (
+                            $data['correction_mode'] === 'keep_tag' &&
+                            ($breedChanged || $birthYearChanged)
+                        ) {
+                            throw ValidationException::withMessages([
+                                'correction_mode' =>
+                                    'The existing tag cannot be retained when the breed '
+                                    . 'or birth year changes. Select “Retire existing tag '
+                                    . 'and issue the next sequence”.',
+                            ]);
+                        }
+
+                        $lineageData = [
+                            'sire_id' => $animal->sire_id,
+                            'dam_id' => $animal->dam_id,
+                            'species' => $newBreed->parent_category,
+                            'date_of_birth' => $newBirthDate->toDateString(),
+                        ];
+
+                        $this->validateLineage($lineageData);
+
+                        $oldTag = $animal->tag_number;
+                        $oldBreedId = $animal->breed_id;
+                        $oldDateOfBirth = $animal->date_of_birth;
+
+                        $newTag = $oldTag;
+                        $newSequence = $animal->tag_sequence;
+
+                        if ($data['correction_mode'] === 'issue_next_tag') {
+                            $tagData = app(
+                                AnimalTagGeneratorService::class
+                            )->generateForBreedAndBirthDate(
+                                $newBreed,
+                                $newBirthDate
+                            );
+
+                            $newTag = $tagData['tag_number'];
+                            $newSequence = $tagData['tag_sequence'];
+                        }
+
+                        AnimalTagCorrection::query()->create([
+                            'animal_id' => $animal->id,
+                            'old_tag_number' => $oldTag,
+                            'new_tag_number' => $newTag,
+                            'old_breed_id' => $oldBreedId,
+                            'new_breed_id' => $newBreed->id,
+                            'old_date_of_birth' => $oldDateOfBirth,
+                            'new_date_of_birth' => $newBirthDate->toDateString(),
+                            'correction_type' => $data['correction_mode'],
+                            'reason' => $data['reason'],
+                            'corrected_by' => auth()->id(),
+                        ]);
+
+                        $animal->forceFill([
+                            'tag_number' => $newTag,
+                            'tag_sequence' => $newSequence,
+                            'breed_id' => $newBreed->id,
+                            'purity_breed_id' => $newBreed->id,
+                            'species' => $newBreed->parent_category,
+                            'date_of_birth' => $newBirthDate->toDateString(),
+                            'date_of_birth_is_estimated' =>
+                                (bool) ($data['date_of_birth_is_estimated'] ?? false),
+                            'updated_by' => auth()->id(),
+                        ])->save();
+
+                        app(BreedPurityService::class)->recalculate($animal);
+                    }, 5);
+
+                    $this->record->refresh();
+
+                    $this->refreshFormData([
+                        'tag_number',
+                        'tag_sequence',
+                        'breed_id',
+                        'purity_breed_id',
+                        'species',
+                        'date_of_birth',
+                        'date_of_birth_is_estimated',
+                    ]);
+
+                    Notification::make()
+                        ->success()
+                        ->title('Animal identity corrected')
+                        ->body(
+                            'Current permanent tag: '
+                            . $this->record->tag_number
+                        )
+                        ->persistent()
+                        ->send();
+                }),
             Actions\DeleteAction::make()
                 ->visible(
-                    fn (): bool =>
+                    fn(): bool =>
                         auth()->user()?->hasRole('Administrator') ?? false
                 ),
         ];
@@ -211,7 +405,7 @@ class EditAnimal extends EditRecord
 
         $purityBreed = Breed::find($purityBreedId);
 
-        if (! $purityBreed) {
+        if (!$purityBreed) {
             throw ValidationException::withMessages([
                 'purity_breed_id' => 'The selected purity breed is invalid.',
             ]);
@@ -269,7 +463,7 @@ class EditAnimal extends EditRecord
             $parents->get($sireId),
             'Male',
             'sire_id',
-            $data['species'],
+            $data['species'] ?? null,
             $animalDob
         );
 
@@ -277,7 +471,7 @@ class EditAnimal extends EditRecord
             $parents->get($damId),
             'Female',
             'dam_id',
-            $data['species'],
+            $data['species'] ?? null,
             $animalDob
         );
     }
@@ -289,7 +483,7 @@ class EditAnimal extends EditRecord
         ?string $species,
         ?Carbon $animalDob
     ): void {
-        if (! $parent) {
+        if (!$parent) {
             return;
         }
 
@@ -306,9 +500,9 @@ class EditAnimal extends EditRecord
         }
 
         if (
-            $animalDob
-            && $parent->date_of_birth
-            && Carbon::parse($parent->date_of_birth)
+            $animalDob &&
+            $parent->date_of_birth &&
+            Carbon::parse($parent->date_of_birth)
                 ->greaterThan($animalDob->copy()->subYear())
         ) {
             throw ValidationException::withMessages([

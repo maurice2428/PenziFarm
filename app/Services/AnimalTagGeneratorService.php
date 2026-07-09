@@ -15,10 +15,12 @@ class AnimalTagGeneratorService
     private const FARM_PREFIX = 'PENZIF';
 
     /**
-     * Preview only. No tag number is reserved here.
+     * Preview only. No sequence is reserved or consumed here.
      */
-    public function previewForBreedAndBirthDate(Breed $breed, mixed $birthDate): array
-    {
+    public function previewForBreedAndBirthDate(
+        Breed $breed,
+        mixed $birthDate
+    ): array {
         $year = $this->birthYear($birthDate);
 
         $lastNumber = max(
@@ -27,46 +29,40 @@ class AnimalTagGeneratorService
         );
 
         $nextNumber = $lastNumber + 1;
+        $tagNumber = $this->formatTag($breed, $year, $nextNumber);
 
-        $this->assertTagAvailableForBreed(
-            $breed,
-            $this->formatTag($breed, $year, $nextNumber)
-        );
+        $this->assertTagAvailableForBreed($breed, $tagNumber);
 
         return [
-            'tag_number' => $this->formatTag($breed, $year, $nextNumber),
+            'tag_number' => $tagNumber,
             'tag_sequence' => $nextNumber,
             'birth_year' => $year,
         ];
     }
 
     /**
-     * Generates the next tag safely and reserves its yearly tally.
+     * Generates and permanently reserves the next yearly sequence.
+     *
+     * Once a number is issued, the counter is never reduced. Therefore, when
+     * PENZIFD2501 is corrected or retired, the next generated tag remains
+     * PENZIFD2502 rather than reusing 01.
      */
-    public function generateForBreedAndBirthDate(Breed $breed, mixed $birthDate): array
-    {
+    public function generateForBreedAndBirthDate(
+        Breed $breed,
+        mixed $birthDate
+    ): array {
         $year = $this->birthYear($birthDate);
 
-        return DB::transaction(function () use ($breed, $year) {
+        return DB::transaction(function () use ($breed, $year): array {
             $counter = $this->counterForUpdate($breed->id, $year);
 
-            /*
-             * Uses whichever is higher:
-             * 1. Stored yearly counter
-             * 2. Existing Penzi-tagged animals already in the database
-             */
             $lastNumber = max(
                 (int) $counter->last_number,
                 $this->highestExistingSequence($breed, $year),
             );
 
             $nextNumber = $lastNumber + 1;
-
-            $tagNumber = $this->formatTag(
-                $breed,
-                $year,
-                $nextNumber
-            );
+            $tagNumber = $this->formatTag($breed, $year, $nextNumber);
 
             $this->assertTagAvailableForBreed($breed, $tagNumber);
 
@@ -87,7 +83,7 @@ class AnimalTagGeneratorService
 
     /**
      * Retained for compatibility with an older CSV importer.
-     * The new Excel import should leave tag_number blank.
+     * New imports should normally leave tag_number blank and use generation.
      */
     public function reserveProvidedTag(
         Breed $breed,
@@ -101,10 +97,9 @@ class AnimalTagGeneratorService
         );
 
         $expectedPrefix = $this->tagPrefix($breed, $year);
-
         $pattern = '/^' . preg_quote($expectedPrefix, '/') . '(\d{2,})$/';
 
-        if (!preg_match($pattern, $tag, $matches)) {
+        if (! preg_match($pattern, $tag, $matches)) {
             throw new RuntimeException(
                 "Tag {$tag} is invalid. Expected a value like "
                 . $this->formatTag($breed, $year, 1)
@@ -124,7 +119,7 @@ class AnimalTagGeneratorService
             $year,
             $tag,
             $sequence
-        ) {
+        ): array {
             $this->assertTagAvailableForBreed($breed, $tag);
 
             $counter = $this->counterForUpdate($breed->id, $year);
@@ -182,8 +177,8 @@ class AnimalTagGeneratorService
             ]);
         } catch (QueryException $exception) {
             /*
-             * Another request may create the same breed/year counter
-             * at the same moment. Retrieve that counter below.
+             * Another request may create this same breed/year counter at the
+             * same time. A duplicate-key error is safe; retrieve it below.
              */
             $mysqlErrorCode = (int) ($exception->errorInfo[1] ?? 0);
 
@@ -198,7 +193,7 @@ class AnimalTagGeneratorService
             ->lockForUpdate()
             ->first();
 
-        if (!$counter) {
+        if (! $counter) {
             throw new RuntimeException(
                 'Unable to initialise the yearly Penzi tag counter.'
             );
@@ -208,15 +203,17 @@ class AnimalTagGeneratorService
     }
 
     /**
-     * Finds the highest existing Penzi tally for this exact breed/year.
-     * Existing records remain untouched.
+     * Finds the highest existing tally using this exact tag prefix and year.
+     *
+     * The query intentionally does not filter by breed_id. Two breeds beginning
+     * with the same letter share the same visible prefix, so their issued tags
+     * must not collide.
      */
     private function highestExistingSequence(Breed $breed, int $year): int
     {
         $prefix = $this->tagPrefix($breed, $year);
 
         $tags = Animal::query()
-            ->where('breed_id', $breed->id)
             ->where('tag_number', 'like', $prefix . '%')
             ->pluck('tag_number');
 
@@ -245,7 +242,7 @@ class AnimalTagGeneratorService
             ->where('tag_number', $tagNumber)
             ->first(['id', 'breed_id']);
 
-        if (!$existingAnimal) {
+        if (! $existingAnimal) {
             return;
         }
 
@@ -257,8 +254,8 @@ class AnimalTagGeneratorService
 
         throw new RuntimeException(
             "The tag {$tagNumber} already belongs to another breed. "
-            . 'Two breeds with the same first letter cannot use the same '
-            . 'yearly tally under the one-letter tag rule.'
+            . 'Breeds sharing the same first letter also share the same visible '
+            . 'tag prefix and must continue with the next available tally.'
         );
     }
 
@@ -273,9 +270,7 @@ class AnimalTagGeneratorService
         try {
             $date = Carbon::parse($birthDate);
         } catch (Throwable) {
-            throw new RuntimeException(
-                'Date of birth is invalid.'
-            );
+            throw new RuntimeException('Date of birth is invalid.');
         }
 
         if ($date->isFuture()) {
@@ -288,16 +283,13 @@ class AnimalTagGeneratorService
     }
 
     /**
-     * Uses only the first letter of the actual breed name.
-     * Species and the Breed Prefix field are ignored.
+     * Uses the first alphabetic character of the actual breed name.
      */
     private function breedLetter(Breed $breed): string
     {
-        $breedName = strtoupper(
-            trim((string) $breed->breed_name)
-        );
+        $breedName = strtoupper(trim((string) $breed->breed_name));
 
-        if (!preg_match('/[A-Z]/', $breedName, $matches)) {
+        if (! preg_match('/[A-Z]/', $breedName, $matches)) {
             throw new RuntimeException(
                 'A valid breed name is required to generate a tag.'
             );

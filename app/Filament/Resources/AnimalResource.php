@@ -13,14 +13,14 @@ use App\Services\AnimalTagGeneratorService;
 use App\Services\BreedPurityService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
-use Filament\Forms;
 use Filament\Forms\Components\Actions\Action as FormAction;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Support\Enums\MaxWidth;
-use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Forms;
+use Filament\Tables;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -88,7 +88,27 @@ class AnimalResource extends Resource
                         ->preload()
                         ->required()
                         ->live()
-                        ->afterStateUpdated(function ($state, Forms\Set $set): void {
+                        ->disabled(
+                            fn (string $operation): bool => $operation === 'edit'
+                        )
+                        ->dehydrated(
+                            fn (string $operation): bool => $operation === 'create'
+                        )
+                        ->helperText(
+                            fn (string $operation): string =>
+                                $operation === 'edit'
+                                    ? 'Breed is locked because it forms part of the permanent animal tag. Use Correct Animal Identity for authorised corrections.'
+                                    : 'The selected breed determines the Penzi tag prefix.'
+                        )
+                        ->afterStateUpdated(function (
+                            $state,
+                            Forms\Set $set,
+                            string $operation
+                        ): void {
+                            if ($operation !== 'create') {
+                                return;
+                            }
+
                             if (blank($state)) {
                                 $set('species', null);
                                 $set('purity_breed_id', null);
@@ -105,23 +125,88 @@ class AnimalResource extends Resource
                             $set('sire_id', null);
                             $set('dam_id', null);
                         }),
-
                     Forms\Components\Placeholder::make('penzi_tag_preview')
-                        ->label('Tag Preview')
-                        ->content(function (Forms\Get $get): HtmlString {
-                            $breedId = $get('breed_id');
-                            $dateOfBirth = $get('date_of_birth');
-
+                        ->label('Animal Tag')
+                        ->content(function (
+                            Forms\Get $get,
+                            ?Animal $record,
+                            string $operation
+                        ): HtmlString {
                             $baseStyle = '
-                                border: 1px solid #bbf7d0;
-                                border-left: 5px solid #15803d;
+                                border:1px solid #bbf7d0;
+                                border-left:5px solid #15803d;
                                 background:
                                     radial-gradient(circle at top right, rgba(34, 197, 94, .16), transparent 42%),
                                     linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
-                                padding: 16px;
-                                min-height: 115px;
-                                box-shadow: 0 10px 24px rgba(21, 128, 61, .08);
+                                padding:16px;
+                                min-height:115px;
+                                box-shadow:0 10px 24px rgba(21, 128, 61, .08);
                             ';
+
+                            if ($operation === 'edit' && $record) {
+                                $tag = e($record->tag_number);
+                                $breedName = e(
+                                    $record->breed?->breed_name ?? 'Unknown breed'
+                                );
+                                $birthYear = $record->date_of_birth
+                                    ? Carbon::parse($record->date_of_birth)->format('Y')
+                                    : '-';
+                                $sequence = str_pad(
+                                    (string) $record->tag_sequence,
+                                    2,
+                                    '0',
+                                    STR_PAD_LEFT
+                                );
+
+                                return new HtmlString(
+                                    '<div style="
+                                        border:1px solid #bfdbfe;
+                                        border-left:5px solid #2563eb;
+                                        background:
+                                            radial-gradient(circle at top right, rgba(59, 130, 246, .14), transparent 42%),
+                                            linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+                                        padding:16px;
+                                        min-height:115px;
+                                        box-shadow:0 10px 24px rgba(37, 99, 235, .08);
+                                    ">
+                                        <div style="display:flex;justify-content:space-between;gap:12px;">
+                                            <div>
+                                                <div style="color:#1d4ed8;font-size:11px;font-weight:900;text-transform:uppercase;">
+                                                    Permanent Animal Tag
+                                                </div>
+                                                <div style="margin-top:10px;color:#1e3a8a;font-family:monospace;font-size:25px;font-weight:950;">
+                                                    ' . $tag . '
+                                                </div>
+                                            </div>
+                                            <div style="height:max-content;padding:6px 9px;background:#dbeafe;border:1px solid #93c5fd;color:#1d4ed8;font-size:10px;font-weight:900;">
+                                                LOCKED
+                                            </div>
+                                        </div>
+
+                                        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:15px;">
+                                            <div style="padding:7px 8px;border:1px solid #dbeafe;">
+                                                <div style="color:#6b7280;font-size:9px;font-weight:900;">BREED</div>
+                                                <div style="margin-top:3px;color:#1f2937;font-size:11px;font-weight:850;">' . $breedName . '</div>
+                                            </div>
+                                            <div style="padding:7px 8px;border:1px solid #dbeafe;">
+                                                <div style="color:#6b7280;font-size:9px;font-weight:900;">BIRTH YEAR</div>
+                                                <div style="margin-top:3px;color:#1f2937;font-size:11px;font-weight:850;">' . e($birthYear) . '</div>
+                                            </div>
+                                            <div style="padding:7px 8px;border:1px solid #dbeafe;">
+                                                <div style="color:#6b7280;font-size:9px;font-weight:900;">TALLY</div>
+                                                <div style="margin-top:3px;color:#1f2937;font-size:11px;font-weight:850;">#' . e($sequence) . '</div>
+                                            </div>
+                                        </div>
+
+                                        <div style="margin-top:11px;color:#475569;font-size:10px;">
+                                            Normal edits cannot regenerate this tag. Administrators must use Correct Animal Identity for verified corrections.
+                                        </div>
+                                    </div>'
+                                );
+                            }
+
+                            $breedId = $get('breed_id');
+                            $dateOfBirth = $get('date_of_birth');
 
                             if (blank($breedId) || blank($dateOfBirth)) {
                                 return new HtmlString(
@@ -177,7 +262,7 @@ class AnimalResource extends Resource
                                                     ' . $tag . '
                                                 </div>
                                             </div>
-                                            <div style="padding:6px 9px;background:#dcfce7;border:1px solid #86efac;color:#166534;font-size:10px;font-weight:900;">
+                                            <div style="height:max-content;padding:6px 9px;background:#dcfce7;border:1px solid #86efac;color:#166534;font-size:10px;font-weight:900;">
                                                 PREVIEW
                                             </div>
                                         </div>
@@ -206,37 +291,59 @@ class AnimalResource extends Resource
                                 return new HtmlString(
                                     '<div style="border:1px solid #fecaca;border-left:5px solid #dc2626;background:#fef2f2;padding:14px;color:#991b1b;">
                                         <strong>Tag preview unavailable.</strong><br>'
-                                        . e($exception->getMessage()) .
-                                    '</div>'
+                                    . e($exception->getMessage())
+                                    . '</div>'
                                 );
                             }
                         })
                         ->live()
                         ->columnSpan(1),
-
                     Forms\Components\Select::make('sex')
                         ->options([
                             'Male' => 'Male',
                             'Female' => 'Female',
                         ])
                         ->required(),
-
                     Forms\Components\DatePicker::make('date_of_birth')
                         ->label('Date of Birth')
                         ->required()
                         ->maxDate(today())
                         ->live()
-                        ->afterStateUpdated(function (Forms\Set $set): void {
+                        ->disabled(
+                            fn (string $operation): bool => $operation === 'edit'
+                        )
+                        ->dehydrated(
+                            fn (string $operation): bool => $operation === 'create'
+                        )
+                        ->helperText(
+                            fn (string $operation): string =>
+                                $operation === 'edit'
+                                    ? 'Date of birth is locked because its year forms part of the permanent animal tag.'
+                                    : 'The birth year determines the year portion of the animal tag.'
+                        )
+                        ->afterStateUpdated(function (
+                            Forms\Set $set,
+                            string $operation
+                        ): void {
+                            if ($operation !== 'create') {
+                                return;
+                            }
+
                             $set('sire_id', null);
                             $set('dam_id', null);
                         }),
 
                     Forms\Components\Toggle::make('date_of_birth_is_estimated')
                         ->label('Estimated Date of Birth')
-                        ->default(false),
+                        ->default(false)
+                        ->disabled(
+                            fn (string $operation): bool => $operation === 'edit'
+                        )
+                        ->dehydrated(
+                            fn (string $operation): bool => $operation === 'create'
+                        ),
                 ])
                 ->columns(2),
-
             Forms\Components\Section::make('Animal Classification')
                 ->schema([
                     Forms\Components\Select::make('source')
@@ -247,7 +354,6 @@ class AnimalResource extends Resource
                         ->default('Born on farm')
                         ->required()
                         ->live(),
-
                     Forms\Components\Select::make('purpose')
                         ->options([
                             'Breeding' => 'Breeding',
@@ -264,7 +370,6 @@ class AnimalResource extends Resource
                                 $set('sale_ready', false);
                             }
                         }),
-
                     Forms\Components\Toggle::make('is_breeder')
                         ->label('Retained for Breeding')
                         ->default(false)
@@ -274,7 +379,6 @@ class AnimalResource extends Resource
                                 $set('sale_ready', false);
                             }
                         }),
-
                     Forms\Components\Toggle::make('sale_ready')
                         ->label('Ready for Sale')
                         ->default(false)
@@ -284,7 +388,6 @@ class AnimalResource extends Resource
                                 $set('is_breeder', false);
                             }
                         }),
-
                     Forms\Components\Select::make('status')
                         ->options([
                             'Active' => 'Active',
@@ -295,41 +398,33 @@ class AnimalResource extends Resource
                         ->default('Active')
                         ->required()
                         ->live(),
-
                     Forms\Components\TextInput::make('valuation_price')
                         ->numeric()
                         ->prefix('KES'),
                 ])
                 ->columns(2),
-
             Forms\Components\Section::make('Purchase Details')
                 ->schema([
                     Forms\Components\DatePicker::make('bought_on')
                         ->label('Bought On'),
-
                     Forms\Components\TextInput::make('bought_from')
                         ->label('Bought From')
                         ->maxLength(255),
-
                     Forms\Components\TextInput::make('seller_phone')
                         ->label('Seller Phone')
                         ->maxLength(50),
-
                     Forms\Components\TextInput::make('seller_email')
                         ->label('Seller Email')
                         ->email()
                         ->maxLength(255),
-
                     Forms\Components\TextInput::make('purchase_price')
                         ->label('Purchase Price')
                         ->numeric()
                         ->prefix('KES'),
-
                     Forms\Components\Textarea::make('seller_address')
                         ->label('Seller Address')
                         ->rows(3)
                         ->columnSpanFull(),
-
                     Forms\Components\Textarea::make('purchase_notes')
                         ->label('Purchase Notes')
                         ->rows(3)
@@ -340,7 +435,6 @@ class AnimalResource extends Resource
                     fn (Forms\Get $get): bool =>
                         $get('source') === 'Purchased'
                 ),
-
             Forms\Components\Section::make('Breed Purity & Pedigree Registration')
                 ->description(
                     'Foundation animals are approved as 100%. Offspring are calculated from their sire and dam.'
@@ -354,7 +448,6 @@ class AnimalResource extends Resource
                     Forms\Components\Hidden::make('purity_breed_id')
                         ->default(fn (Forms\Get $get) => $get('breed_id'))
                         ->dehydrated(),
-
                     Forms\Components\Placeholder::make('purity_breed_display')
                         ->label('Purity Breed')
                         ->content(function (Forms\Get $get): HtmlString {
@@ -366,7 +459,6 @@ class AnimalResource extends Resource
                                 . '<span style="display:block;margin-top:4px;color:#6b7280;font-size:11px;font-weight:600;">Automatically taken from Animal Identity → Breed</span></div>'
                             );
                         }),
-
                     Forms\Components\Toggle::make('is_foundation_animal')
                         ->label('Approved Foundation Animal')
                         ->default(false)
@@ -380,7 +472,6 @@ class AnimalResource extends Resource
                                 $set('purity_status', 'foundation');
                             }
                         }),
-
                     Forms\Components\Select::make('purity_status')
                         ->label('Purity Verification Type')
                         ->options([
@@ -393,9 +484,8 @@ class AnimalResource extends Resource
                         ->live()
                         ->visible(
                             fn (Forms\Get $get): bool =>
-                                ! (bool) $get('is_foundation_animal')
+                                !(bool) $get('is_foundation_animal')
                         ),
-
                     Forms\Components\TextInput::make('purity_override_percent')
                         ->label('Verified Purity Percentage')
                         ->numeric()
@@ -410,10 +500,9 @@ class AnimalResource extends Resource
                                     $get('purity_status'),
                                     ['dna_verified', 'manual_verified'],
                                     true
-                                )
-                                && ! (bool) $get('is_foundation_animal')
+                                ) &&
+                                !(bool) $get('is_foundation_animal')
                         ),
-
                     Forms\Components\DatePicker::make('purity_verified_at')
                         ->label('Verification Date')
                         ->visible(
@@ -424,12 +513,10 @@ class AnimalResource extends Resource
                                     true
                                 )
                         ),
-
                     Forms\Components\Textarea::make('purity_notes')
                         ->label('Purity Evidence / Notes')
                         ->rows(3)
                         ->columnSpanFull(),
-
                     Forms\Components\Placeholder::make('purity_preview')
                         ->label('Calculated Breed Purity')
                         ->content(function (Forms\Get $get): HtmlString {
@@ -469,7 +556,6 @@ class AnimalResource extends Resource
                         ->columnSpanFull(),
                 ])
                 ->columns(2),
-
             Forms\Components\Section::make('Death Details')
                 ->schema([
                     Forms\Components\DatePicker::make('date_died')
@@ -478,7 +564,6 @@ class AnimalResource extends Resource
                             fn (Forms\Get $get): bool =>
                                 $get('status') === 'Dead'
                         ),
-
                     Forms\Components\TextInput::make('cause_of_death')
                         ->label('Cause of Death')
                         ->required(
@@ -486,7 +571,6 @@ class AnimalResource extends Resource
                                 $get('status') === 'Dead'
                         )
                         ->maxLength(255),
-
                     Forms\Components\Textarea::make('death_comments')
                         ->label('Comments')
                         ->rows(3)
@@ -497,7 +581,6 @@ class AnimalResource extends Resource
                     fn (Forms\Get $get): bool =>
                         $get('status') === 'Dead'
                 ),
-
             Forms\Components\Section::make('Culling Details')
                 ->schema([
                     Forms\Components\DatePicker::make('date_culled')
@@ -506,7 +589,6 @@ class AnimalResource extends Resource
                             fn (Forms\Get $get): bool =>
                                 $get('status') === 'Culled'
                         ),
-
                     Forms\Components\TextInput::make('culling_reason')
                         ->label('Reason for Culling')
                         ->required(
@@ -514,7 +596,6 @@ class AnimalResource extends Resource
                                 $get('status') === 'Culled'
                         )
                         ->maxLength(255),
-
                     Forms\Components\Textarea::make('culling_comments')
                         ->label('Comments')
                         ->rows(3)
@@ -525,7 +606,6 @@ class AnimalResource extends Resource
                     fn (Forms\Get $get): bool =>
                         $get('status') === 'Culled'
                 ),
-
             Forms\Components\Section::make('Lineage & Location')
                 ->description(
                     'Parents can be different breeds, but must match the animal species and be at least one year older.'
@@ -574,7 +654,6 @@ class AnimalResource extends Resource
                         ->helperText(
                             'Compatible male animals of the same species, at least one year older.'
                         ),
-
                     Forms\Components\Select::make('dam_id')
                         ->label('Dam (Mother)')
                         ->options(function (
@@ -618,7 +697,6 @@ class AnimalResource extends Resource
                         ->helperText(
                             'Compatible female animals of the same species, at least one year older.'
                         ),
-
                     Forms\Components\Select::make('current_location_id')
                         ->label('Current Location')
                         ->relationship(
@@ -689,7 +767,6 @@ class AnimalResource extends Resource
                                 ->modalSubmitActionLabel('Save Location')
                                 ->modalCancelActionLabel('Cancel')
                         ),
-
                     Forms\Components\Textarea::make('notes')
                         ->rows(4)
                         ->columnSpanFull(),
@@ -723,12 +800,10 @@ class AnimalResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->weight('bold'),
-
                 Tables\Columns\TextColumn::make('breed.breed_name')
                     ->label('Breed')
                     ->searchable()
                     ->sortable(),
-
                 Tables\Columns\TextColumn::make('breed_purity_percent')
                     ->label('Purity')
                     ->badge()
@@ -758,7 +833,6 @@ class AnimalResource extends Resource
                                 ->title()
                                 ->toString()
                     ),
-
                 Tables\Columns\TextColumn::make('current_weight')
                     ->label('Weight')
                     ->badge()
@@ -803,13 +877,10 @@ class AnimalResource extends Resource
                     ->openUrlInNewTab()
                     ->tooltip('Click to view weight history')
                     ->sortable(false),
-
                 Tables\Columns\TextColumn::make('species')
                     ->sortable(),
-
                 Tables\Columns\TextColumn::make('sex')
                     ->badge(),
-
                 Tables\Columns\TextColumn::make('age_display')
                     ->label('Age')
                     ->state(function (Animal $record): string {
@@ -840,41 +911,32 @@ class AnimalResource extends Resource
                                 : 'success'
                     )
                     ->toggleable(),
-
                 Tables\Columns\TextColumn::make('purpose')
                     ->badge(),
-
                 Tables\Columns\IconColumn::make('is_breeder')
                     ->label('Breeder')
                     ->boolean(),
-
                 Tables\Columns\IconColumn::make('sale_ready')
                     ->label('Sale Ready')
                     ->boolean(),
-
                 Tables\Columns\TextColumn::make('status')
                     ->badge(),
-
                 Tables\Columns\IconColumn::make('is_archived')
                     ->label('Archived')
                     ->boolean()
                     ->toggleable(isToggledHiddenByDefault: true),
-
                 Tables\Columns\TextColumn::make('location.name')
                     ->label('Location')
                     ->default('-')
                     ->toggleable(isToggledHiddenByDefault: true),
-
                 Tables\Columns\TextColumn::make('source')
                     ->label('Source')
                     ->badge()
                     ->toggleable(isToggledHiddenByDefault: true),
-
                 Tables\Columns\TextColumn::make('valuation_price')
                     ->label('Valuation')
                     ->money('KES')
                     ->toggleable(isToggledHiddenByDefault: true),
-
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Created At')
                     ->dateTime('d M Y H:i')
@@ -893,7 +955,6 @@ class AnimalResource extends Resource
                     )
                     ->searchable()
                     ->preload(),
-
                 Tables\Filters\SelectFilter::make('purity_status')
                     ->label('Purity Status')
                     ->options([
@@ -903,7 +964,6 @@ class AnimalResource extends Resource
                         'manual_verified' => 'Manual Verified',
                         'pending' => 'Pending',
                     ]),
-
                 Tables\Filters\SelectFilter::make('species')
                     ->options([
                         'Sheep' => 'Sheep',
@@ -911,7 +971,6 @@ class AnimalResource extends Resource
                         'Cattle' => 'Cattle',
                         'Poultry' => 'Poultry',
                     ]),
-
                 Tables\Filters\SelectFilter::make('status')
                     ->options([
                         'Active' => 'Active',
@@ -919,13 +978,10 @@ class AnimalResource extends Resource
                         'Dead' => 'Dead',
                         'Culled' => 'Culled',
                     ]),
-
                 Tables\Filters\TernaryFilter::make('is_breeder')
                     ->label('Breeder'),
-
                 Tables\Filters\TernaryFilter::make('sale_ready')
                     ->label('Sale Ready'),
-
                 Tables\Filters\TernaryFilter::make('is_archived')
                     ->label('Archived'),
             ])
@@ -943,7 +999,6 @@ class AnimalResource extends Resource
                             'record' => $record,
                         ])
                     ),
-
                 Tables\Actions\Action::make('generateAnimalProfilePdf')
                     ->icon('heroicon-o-document-arrow-down')
                     ->iconButton()
@@ -958,7 +1013,6 @@ class AnimalResource extends Resource
                             ['animal' => $record->getKey()]
                         )
                     ),
-
                 Tables\Actions\Action::make('archive')
                     ->label('Archive')
                     ->icon('heroicon-o-archive-box')
@@ -966,9 +1020,9 @@ class AnimalResource extends Resource
                     ->requiresConfirmation()
                     ->visible(
                         fn (Animal $record): bool =>
-                            (auth()->user()?->can('archive animals') ?? false)
-                            && ! $archivedView
-                            && ! $record->is_archived
+                            (auth()->user()?->can('archive animals') ?? false) &&
+                            !$archivedView &&
+                            !$record->is_archived
                     )
                     ->action(function (Animal $record, $livewire): void {
                         $record->update(['is_archived' => true]);
@@ -983,7 +1037,6 @@ class AnimalResource extends Resource
                             navigate: true
                         );
                     }),
-
                 Tables\Actions\Action::make('restore')
                     ->label('Restore')
                     ->icon('heroicon-o-arrow-uturn-left')
@@ -991,9 +1044,9 @@ class AnimalResource extends Resource
                     ->requiresConfirmation()
                     ->visible(
                         fn (Animal $record): bool =>
-                            (auth()->user()?->can('restore animals') ?? false)
-                            && $archivedView
-                            && $record->is_archived
+                            (auth()->user()?->can('restore animals') ?? false) &&
+                            $archivedView &&
+                            $record->is_archived
                     )
                     ->action(function (Animal $record, $livewire): void {
                         $record->update(['is_archived' => false]);
@@ -1008,7 +1061,6 @@ class AnimalResource extends Resource
                             navigate: true
                         );
                     }),
-
                 static::makeSafeDeleteAction(),
             ])
             ->defaultSort('created_at', 'desc');
@@ -1032,7 +1084,6 @@ class AnimalResource extends Resource
                                 ->title('Selected animals restored successfully.')
                                 ->send();
                         }),
-
                     static::makeSafeDeleteBulkAction(),
                 ])->label('Bulk Actions'),
             ]);
@@ -1056,7 +1107,6 @@ class AnimalResource extends Resource
                             ->title('Selected animals archived successfully.')
                             ->send();
                     }),
-
                 Tables\Actions\BulkAction::make('printAnimalsPdf')
                     ->label('Print PDF')
                     ->icon('heroicon-o-printer')
@@ -1138,16 +1188,14 @@ class AnimalResource extends Resource
                         return response()->streamDownload(
                             fn () => print($pdf->output()),
                             'animal-bulk-report-'
-                            . now('Africa/Nairobi')->format('Ymd_His')
-                            . '.pdf'
+                                . now('Africa/Nairobi')->format('Ymd_His')
+                                . '.pdf'
                         );
                     }),
-
                 static::makeSafeDeleteBulkAction(),
             ])->label('Bulk Actions'),
         ]);
     }
-
 
     private static function makeSafeDeleteAction(): Tables\Actions\Action
     {
@@ -1321,7 +1369,7 @@ class AnimalResource extends Resource
         $blockers = [];
 
         foreach ($checks as [$table, $column, $label]) {
-            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
+            if (! Schema::hasTable($table) || !Schema::hasColumn($table, $column)) {
                 continue;
             }
 
