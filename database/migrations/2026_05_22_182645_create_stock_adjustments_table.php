@@ -15,8 +15,8 @@ return new class extends Migration
                 $table->string('adjustment_no')->unique();
                 $table->date('adjustment_date');
 
-                $table->string('reason')->default('manual_correction');
-                // manual_correction, damaged_stock, expired_stock, stock_count, opening_balance_correction, other
+                $table->string('reason')
+                    ->default('manual_correction');
 
                 $table->decimal('total_in_quantity', 15, 3)->default(0);
                 $table->decimal('total_out_quantity', 15, 3)->default(0);
@@ -37,7 +37,10 @@ return new class extends Migration
                 $table->timestamps();
                 $table->softDeletes();
 
-                $table->index(['adjustment_date', 'reason'], 'stock_adj_date_reason_idx');
+                $table->index(
+                    ['adjustment_date', 'reason'],
+                    'stock_adj_date_reason_idx'
+                );
             });
         }
 
@@ -54,8 +57,6 @@ return new class extends Migration
                     ->restrictOnDelete();
 
                 $table->string('direction');
-                // in, out
-
                 $table->decimal('quantity', 15, 3);
                 $table->string('unit')->nullable();
 
@@ -69,9 +70,6 @@ return new class extends Migration
 
                 $table->timestamps();
                 $table->softDeletes();
-
-                $table->index('stock_adjustment_id', 'stock_adj_item_adj_idx');
-                $table->index('inventory_item_id', 'stock_adj_item_inventory_idx');
             });
         }
     }
