@@ -6,6 +6,7 @@ use App\Filament\Clusters\Livestock\Animals as AnimalsCluster;
 use App\Filament\Resources\AnimalResource\Pages;
 use App\Filament\Support\LocationForm;
 use App\Models\Animal;
+use App\Models\AnimalGroup;
 use App\Models\AnimalWeight;
 use App\Models\Breed;
 use App\Models\Location;
@@ -962,6 +963,65 @@ class AnimalResource extends Resource
                     )
                     ->searchable()
                     ->preload(),
+                Tables\Filters\SelectFilter::make('current_location_id')
+                    ->label('Current Location')
+                    ->options(
+                        fn (): array => Location::query()
+                            ->where('is_active', true)
+                            ->whereIn(
+                                'id',
+                                Animal::query()
+                                    ->whereNotNull('current_location_id')
+                                    ->select('current_location_id')
+                            )
+                            ->orderByDesc('is_default')
+                            ->orderBy('name')
+                            ->get()
+                            ->mapWithKeys(
+                                fn (Location $location): array => [
+                                    $location->getKey() =>
+                                        $location->display_name,
+                                ]
+                            )
+                            ->all()
+                    )
+                    ->searchable()
+                    ->preload(),
+
+                Tables\Filters\SelectFilter::make('animal_group_id')
+                    ->label('Animal Group')
+                    ->options(
+                        fn (): array => AnimalGroup::query()
+                            ->where('status', 'active')
+                            ->orderBy('name')
+                            ->pluck('name', 'id')
+                            ->all()
+                    )
+                    ->searchable()
+                    ->preload()
+                    ->query(function (
+                        \Illuminate\Database\Eloquent\Builder $query,
+                        array $data
+                    ): \Illuminate\Database\Eloquent\Builder {
+                        $groupId = $data['value'] ?? null;
+
+                        if (blank($groupId)) {
+                            return $query;
+                        }
+
+                        $group = AnimalGroup::query()->find($groupId);
+
+                        if (! $group) {
+                            return $query->whereRaw('1 = 0');
+                        }
+
+                        return $query->whereIn(
+                            'animals.id',
+                            $group->activeMembers()
+                                ->select('animal_id')
+                        );
+                    }),
+
                 Tables\Filters\SelectFilter::make('purity_status')
                     ->label('Purity Status')
                     ->options([
@@ -992,6 +1052,9 @@ class AnimalResource extends Resource
                 Tables\Filters\TernaryFilter::make('is_archived')
                     ->label('Archived'),
             ])
+            ->filtersFormWidth(MaxWidth::FourExtraLarge)
+            ->filtersFormMaxHeight('min(70vh, 520px)')
+            ->filtersFormColumns(2)
             ->actions([
                 Tables\Actions\Action::make('viewAnimalProfile')
                     ->icon('heroicon-o-identification')

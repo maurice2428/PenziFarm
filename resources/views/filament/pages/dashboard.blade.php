@@ -1830,6 +1830,637 @@
                 display: none;
             }
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Location Snapshot Cards
+        |--------------------------------------------------------------------------
+        | These cards deliberately reuse the Breed Snapshot grid and dimensions
+        | so both dashboard blocks remain visually aligned and responsive.
+        */
+        .location-card-compact {
+            --location-color: {{ $primaryColor }};
+        }
+
+        .location-card-compact::before {
+            border-left-color: var(--location-color);
+            opacity: .95;
+        }
+
+        .location-card-compact::after {
+            background: color-mix(in srgb, var(--location-color) 10%, transparent);
+        }
+
+        .location-card-compact:hover {
+            border-color: color-mix(in srgb, var(--location-color) 32%, #e5e7eb);
+            box-shadow: 0 14px 34px color-mix(in srgb, var(--location-color) 12%, transparent);
+        }
+
+        .location-avatar-compact {
+            color: var(--location-color);
+            background:
+                linear-gradient(
+                    135deg,
+                    color-mix(in srgb, var(--location-color) 13%, white),
+                    #f8fafc
+                );
+            border-color: color-mix(in srgb, var(--location-color) 20%, #e5e7eb);
+        }
+
+        .dark .location-avatar-compact {
+            color: color-mix(in srgb, var(--location-color) 55%, white);
+            background: color-mix(in srgb, var(--location-color) 15%, #111827);
+            border-color: color-mix(in srgb, var(--location-color) 25%, #374151);
+        }
+
+        .location-card-meta {
+            margin-top: .16rem;
+            display: flex;
+            align-items: center;
+            gap: .25rem;
+            min-width: 0;
+            color: #6b7280;
+            font-size: .56rem;
+            font-weight: 800;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dark .location-card-meta {
+            color: #9ca3af;
+        }
+
+        .location-status-dot {
+            width: .38rem;
+            height: .38rem;
+            flex-shrink: 0;
+            border-radius: 999px;
+            background: var(--location-color);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--location-color) 13%, transparent);
+        }
+
+        .location-mini-pill {
+            color: var(--location-color);
+            background: color-mix(in srgb, var(--location-color) 9%, white);
+            border-color: color-mix(in srgb, var(--location-color) 16%, white);
+        }
+
+        .dark .location-mini-pill {
+            background: color-mix(in srgb, var(--location-color) 14%, #111827);
+            border-color: color-mix(in srgb, var(--location-color) 24%, #374151);
+        }
+
+        .location-count-number {
+            color: var(--location-color);
+        }
+
+        .location-default-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .2rem;
+            margin-left: .3rem;
+            padding: .16rem .3rem;
+            color: var(--location-color);
+            background: color-mix(in srgb, var(--location-color) 9%, white);
+            border: 1px solid color-mix(in srgb, var(--location-color) 15%, white);
+            font-size: .46rem;
+            line-height: 1;
+            font-weight: 950;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        .dark .location-default-badge {
+            background: color-mix(in srgb, var(--location-color) 14%, #111827);
+            border-color: color-mix(in srgb, var(--location-color) 24%, #374151);
+        }
+
+        @media (max-width: 640px) {
+            .location-card-meta {
+                font-size: .49rem;
+            }
+
+            .location-default-badge {
+                display: none;
+            }
+        }
+
+
+
+        .location-subsection-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .75rem;
+            margin-bottom: .65rem;
+        }
+
+        .location-subsection-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            min-width: 0;
+        }
+
+        .location-subsection-icon {
+            width: 30px;
+            height: 30px;
+            flex-shrink: 0;
+            display: grid;
+            place-items: center;
+            color: var(--subsection-color);
+            background: color-mix(in srgb, var(--subsection-color) 11%, white);
+            border: 1px solid color-mix(in srgb, var(--subsection-color) 20%, white);
+        }
+
+        .dark .location-subsection-icon {
+            background: color-mix(in srgb, var(--subsection-color) 16%, #111827);
+            border-color: color-mix(in srgb, var(--subsection-color) 28%, #374151);
+        }
+
+        .location-subsection-title {
+            font-size: .78rem;
+            line-height: 1.15;
+            font-weight: 950;
+            color: #111827;
+        }
+
+        .dark .location-subsection-title {
+            color: #f9fafb;
+        }
+
+        .location-subsection-note {
+            margin-top: .12rem;
+            font-size: .56rem;
+            line-height: 1.35;
+            color: #6b7280;
+        }
+
+        .dark .location-subsection-note {
+            color: #9ca3af;
+        }
+
+        .location-subsection-count {
+            flex-shrink: 0;
+            padding: .3rem .48rem;
+            color: var(--subsection-color);
+            background: color-mix(in srgb, var(--subsection-color) 9%, white);
+            border: 1px solid color-mix(in srgb, var(--subsection-color) 16%, white);
+            font-size: .55rem;
+            line-height: 1;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .dark .location-subsection-count {
+            background: color-mix(in srgb, var(--subsection-color) 14%, #111827);
+            border-color: color-mix(in srgb, var(--subsection-color) 22%, #374151);
+        }
+
+        .location-group-divider {
+            position: relative;
+            height: 1px;
+            margin: 1rem 0;
+            border: 0;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                color-mix(in srgb, {{ $primaryColor }} 30%, #d1d5db),
+                transparent
+            );
+        }
+
+        .location-group-divider::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 7px;
+            height: 7px;
+            transform: translate(-50%, -50%) rotate(45deg);
+            background: {{ $primaryColor }};
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 1px color-mix(in srgb, {{ $primaryColor }} 30%, #d1d5db);
+        }
+
+        .dark .location-group-divider::after {
+            border-color: #111827;
+        }
+
+        @media (max-width: 640px) {
+            .location-subsection-head {
+                align-items: flex-start;
+            }
+
+            .location-subsection-icon {
+                width: 27px;
+                height: 27px;
+            }
+
+            .location-subsection-title {
+                font-size: .7rem;
+            }
+
+            .location-subsection-note {
+                font-size: .5rem;
+            }
+
+            .location-subsection-count {
+                font-size: .49rem;
+                padding: .26rem .38rem;
+            }
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Real Animal Group Cards
+        |--------------------------------------------------------------------------
+        */
+        .animal-group-card {
+            position: relative;
+            min-width: 0;
+            min-height: 112px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: .58rem;
+            padding: .65rem;
+            border: 1px solid rgba(229, 231, 235, 1);
+            background:
+                radial-gradient(
+                    circle at top right,
+                    color-mix(in srgb, var(--group-color) 10%, transparent),
+                    transparent 36%
+                ),
+                linear-gradient(
+                    180deg,
+                    rgba(255, 255, 255, .99),
+                    rgba(255, 255, 255, .94)
+                );
+            box-shadow: 0 8px 20px rgba(2, 6, 23, .04);
+            overflow: hidden;
+            color: inherit;
+            transition:
+                transform .18s ease,
+                box-shadow .18s ease,
+                border-color .18s ease;
+        }
+
+        .animal-group-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-left: 3px solid var(--group-color);
+            pointer-events: none;
+        }
+
+        .animal-group-card::after {
+            content: "";
+            position: absolute;
+            width: 96px;
+            height: 96px;
+            right: -36px;
+            top: -42px;
+            border-radius: 999px;
+            background:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 10%,
+                    transparent
+                );
+            pointer-events: none;
+        }
+
+        .animal-group-card:hover {
+            transform: translateY(-2px);
+            border-color:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 30%,
+                    #e5e7eb
+                );
+            box-shadow: 0 15px 36px rgba(2, 6, 23, .085);
+        }
+
+        .dark .animal-group-card {
+            background:
+                radial-gradient(
+                    circle at top right,
+                    color-mix(in srgb, var(--group-color) 17%, transparent),
+                    transparent 38%
+                ),
+                rgba(31, 41, 55, .94);
+            border-color: rgba(148, 163, 184, .14);
+        }
+
+        .animal-group-main,
+        .animal-group-footer {
+            position: relative;
+            z-index: 2;
+        }
+
+        .animal-group-main {
+            display: flex;
+            align-items: flex-start;
+            gap: .58rem;
+            min-width: 0;
+        }
+
+        .animal-group-icon {
+            flex: 0 0 38px;
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            color: var(--group-color);
+            background:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 12%,
+                    white
+                );
+            border:
+                1px solid
+                color-mix(
+                    in srgb,
+                    var(--group-color) 22%,
+                    white
+                );
+        }
+
+        .dark .animal-group-icon {
+            background:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 17%,
+                    #111827
+                );
+            border-color:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 27%,
+                    #374151
+                );
+        }
+
+        .animal-group-info {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .animal-group-name {
+            font-size: .78rem;
+            line-height: 1.18;
+            font-weight: 950;
+            color: #111827;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dark .animal-group-name {
+            color: #f9fafb;
+        }
+
+        .animal-group-code {
+            display: inline-flex;
+            align-items: center;
+            margin-top: .2rem;
+            padding: .2rem .35rem;
+            color: var(--group-color);
+            background:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 9%,
+                    white
+                );
+            border:
+                1px solid
+                color-mix(
+                    in srgb,
+                    var(--group-color) 15%,
+                    white
+                );
+            font-size: .5rem;
+            line-height: 1;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .animal-group-scope {
+            margin-top: .35rem;
+            color: #6b7280;
+            font-size: .55rem;
+            line-height: 1.35;
+            font-weight: 750;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
+        }
+
+        .dark .animal-group-scope {
+            color: #9ca3af;
+        }
+
+        .animal-group-count {
+            flex-shrink: 0;
+            text-align: right;
+        }
+
+        .animal-group-count-value {
+            font-size: 1.28rem;
+            line-height: .9;
+            font-weight: 950;
+            letter-spacing: -.04em;
+            color: var(--group-color);
+        }
+
+        .animal-group-count-label {
+            margin-top: .1rem;
+            color: #9ca3af;
+            font-size: .48rem;
+            line-height: 1;
+            font-weight: 900;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+        }
+
+        .animal-group-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .45rem;
+        }
+
+        .animal-group-actions {
+            display: flex;
+            align-items: center;
+            gap: .35rem;
+            min-width: 0;
+        }
+
+        .animal-group-action {
+            display: inline-flex;
+            align-items: center;
+            gap: .25rem;
+            padding: .28rem .42rem;
+            color: var(--group-color);
+            background:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 9%,
+                    white
+                );
+            border:
+                1px solid
+                color-mix(
+                    in srgb,
+                    var(--group-color) 16%,
+                    white
+                );
+            font-size: .52rem;
+            line-height: 1;
+            font-weight: 950;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .animal-group-action:hover {
+            background:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 15%,
+                    white
+                );
+        }
+
+        .animal-group-action-secondary {
+            color: #64748b;
+            background: rgba(248, 250, 252, .95);
+            border-color: rgba(203, 213, 225, .9);
+        }
+
+        .dark .animal-group-action {
+            background:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 15%,
+                    #111827
+                );
+            border-color:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 24%,
+                    #374151
+                );
+        }
+
+        .dark .animal-group-action-secondary {
+            color: #cbd5e1;
+            background: rgba(15, 23, 42, .8);
+            border-color: rgba(148, 163, 184, .2);
+        }
+
+        .animal-group-type {
+            display: inline-flex;
+            align-items: center;
+            gap: .22rem;
+            max-width: 100%;
+            margin-top: .28rem;
+            padding: .22rem .34rem;
+            color: var(--group-color);
+            background:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 8%,
+                    white
+                );
+            border:
+                1px solid
+                color-mix(
+                    in srgb,
+                    var(--group-color) 14%,
+                    white
+                );
+            font-size: .49rem;
+            line-height: 1;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .animal-group-type span {
+            color: #64748b;
+        }
+
+        .dark .animal-group-type {
+            color:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 62%,
+                    white
+                );
+            background:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 14%,
+                    #111827
+                );
+            border-color:
+                color-mix(
+                    in srgb,
+                    var(--group-color) 22%,
+                    #374151
+                );
+        }
+
+        .dark .animal-group-type span {
+            color: #cbd5e1;
+        }
+
+        @media (max-width: 640px) {
+            .animal-group-card {
+                min-height: 104px;
+                padding: .56rem;
+            }
+
+            .animal-group-icon {
+                width: 33px;
+                height: 33px;
+                flex-basis: 33px;
+            }
+
+            .animal-group-name {
+                font-size: .68rem;
+            }
+
+            .animal-group-scope {
+                font-size: .49rem;
+            }
+
+            .animal-group-count-value {
+                font-size: 1.05rem;
+            }
+
+            .animal-group-action {
+                padding: .24rem .34rem;
+                font-size: .47rem;
+            }
+
+            .animal-group-type {
+                max-width: 100%;
+                margin-top: .24rem;
+                padding: .2rem .3rem;
+                font-size: .43rem;
+            }
+        }
+
     </style>
 
     <div class="farm-dashboard">
@@ -2182,6 +2813,467 @@
                         @else
                             <div class="breed-empty-state">
                                 No breed records found.
+                            </div>
+                        @endif
+                    </div>
+                </div>
+
+
+                @php
+                    /*
+                     * Physical locations come from locations/current_location_id.
+                     * Animal groups are independent records from animal_groups,
+                     * with membership counted through activeMembers.
+                     */
+                    $locationCards = DB::table('locations')
+                        ->leftJoin(
+                            'animals',
+                            'animals.current_location_id',
+                            '=',
+                            'locations.id'
+                        )
+                        ->where('locations.is_active', true)
+                        ->select([
+                            'locations.id',
+                            'locations.name',
+                            'locations.is_default',
+                            DB::raw("
+                                COALESCE(SUM(
+                                    CASE
+                                        WHEN animals.id IS NOT NULL
+                                        AND animals.status = 'Active'
+                                        AND COALESCE(animals.is_archived, 0) = 0
+                                        THEN 1
+                                        ELSE 0
+                                    END
+                                ), 0) as active_animals_count
+                            "),
+                            DB::raw("
+                                COALESCE(SUM(
+                                    CASE
+                                        WHEN animals.id IS NOT NULL
+                                        AND animals.status = 'Active'
+                                        AND COALESCE(animals.is_archived, 0) = 0
+                                        AND animals.sex = 'Male'
+                                        THEN 1
+                                        ELSE 0
+                                    END
+                                ), 0) as male_animals_count
+                            "),
+                            DB::raw("
+                                COALESCE(SUM(
+                                    CASE
+                                        WHEN animals.id IS NOT NULL
+                                        AND animals.status = 'Active'
+                                        AND COALESCE(animals.is_archived, 0) = 0
+                                        AND animals.sex = 'Female'
+                                        THEN 1
+                                        ELSE 0
+                                    END
+                                ), 0) as female_animals_count
+                            "),
+                        ])
+                        ->groupBy(
+                            'locations.id',
+                            'locations.name',
+                            'locations.is_default',
+                        )
+                        ->orderByDesc('locations.is_default')
+                        ->orderByDesc('active_animals_count')
+                        ->orderBy('locations.name')
+                        ->get();
+
+                    $groupCards = \App\Models\AnimalGroup::query()
+                        ->with([
+                            'location:id,name',
+                            'breed:id,breed_name',
+                        ])
+                        ->withCount('activeMembers')
+                        ->where('status', 'active')
+                        ->orderByDesc('active_members_count')
+                        ->orderBy('name')
+                        ->get();
+
+                    $totalLocationAnimals = (int) $locationCards
+                        ->sum('active_animals_count');
+
+                    $totalGroupAnimals = (int) $groupCards
+                        ->sum('active_members_count');
+
+                    $occupiedLocations = $locationCards
+                        ->filter(
+                            fn ($record): bool =>
+                                (int) $record->active_animals_count > 0
+                        )
+                        ->count();
+
+                    $occupiedGroups = $groupCards
+                        ->filter(
+                            fn ($record): bool =>
+                                (int) $record->active_members_count > 0
+                        )
+                        ->count();
+
+                    $locationColors = [
+                        '#2563eb',
+                        '#16a34a',
+                        '#f59e0b',
+                        '#7c3aed',
+                        '#0891b2',
+                        '#dc2626',
+                        '#0f766e',
+                        '#9333ea',
+                    ];
+                @endphp
+
+                <div class="farm-widget-row">
+                    <div class="breed-snapshot-wrap location-snapshot-wrap">
+                        <div class="breed-snapshot-head">
+                            <div>
+                                <div class="breed-snapshot-kicker">
+                                    <x-heroicon-o-map class="h-4 w-4" />
+                                    Housing and management distribution
+                                </div>
+
+                                <div class="breed-snapshot-title">
+                                    Location & Group Snapshot
+                                </div>
+
+                                <div class="breed-snapshot-subtitle">
+                                    Physical locations and management groups are
+                                    presented separately. Open a card to view the
+                                    matching active animals.
+                                </div>
+                            </div>
+
+                            <div class="breed-snapshot-badge">
+                                <x-heroicon-o-chart-bar-square class="h-4 w-4" />
+                                {{ number_format($totalLocationAnimals) }} located
+                                · {{ number_format($totalGroupAnimals) }} grouped
+                            </div>
+                        </div>
+
+                        <div
+                            class="location-subsection-head"
+                            style="--subsection-color: #2563eb;"
+                        >
+                            <div class="location-subsection-title-wrap">
+                                <div class="location-subsection-icon">
+                                    <x-heroicon-o-map-pin class="h-4 w-4" />
+                                </div>
+
+                                <div>
+                                    <div class="location-subsection-title">
+                                        Locations
+                                    </div>
+
+                                    <div class="location-subsection-note">
+                                        Physical stations, sheds, blocks, paddocks,
+                                        rooms, pens, and operational areas.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="location-subsection-count">
+                                {{ number_format($occupiedLocations) }} occupied
+                                · {{ number_format($totalLocationAnimals) }} animals
+                            </div>
+                        </div>
+
+                        @if ($locationCards->isNotEmpty())
+                            <div class="breed-grid-compact">
+                                @foreach ($locationCards as $location)
+                                    @php
+                                        $locationName = $location->name
+                                            ?: 'Unnamed Location';
+
+                                        $locationCount = (int)
+                                            $location->active_animals_count;
+
+                                        $maleCount = (int)
+                                            $location->male_animals_count;
+
+                                        $femaleCount = (int)
+                                            $location->female_animals_count;
+
+                                        $locationColor = $locationColors[
+                                            $loop->index
+                                            % count($locationColors)
+                                        ];
+
+                                        $locationUrl =
+                                            \App\Filament\Resources\AnimalResource::getUrl(
+                                                'index',
+                                                [
+                                                    'tableFilters' => [
+                                                        'current_location_id' => [
+                                                            'value' => (string)
+                                                                $location->id,
+                                                        ],
+                                                    ],
+                                                ]
+                                            );
+                                    @endphp
+
+                                    <a
+                                        href="{{ $locationUrl }}"
+                                        class="breed-card-compact location-card-compact"
+                                        style="--location-color: {{ $locationColor }};"
+                                        title="View animals at {{ $locationName }}"
+                                    >
+                                        <div class="breed-card-main">
+                                            <div class="breed-avatar-compact location-avatar-compact">
+                                                <x-heroicon-o-map-pin class="h-4 w-4" />
+                                            </div>
+
+                                            <div class="breed-card-info">
+                                                <div
+                                                    class="breed-card-name"
+                                                    title="{{ $locationName }}"
+                                                >
+                                                    {{ $locationName }}
+
+                                                    @if ((bool) $location->is_default)
+                                                        <span class="location-default-badge">
+                                                            Default
+                                                        </span>
+                                                    @endif
+                                                </div>
+
+                                                <div class="location-card-meta">
+                                                    <span class="location-status-dot"></span>
+                                                    <span>
+                                                        {{ number_format($maleCount) }}
+                                                        male ·
+                                                        {{ number_format($femaleCount) }}
+                                                        female
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="breed-card-bottom">
+                                            <div class="breed-mini-pill location-mini-pill">
+                                                <x-heroicon-o-arrow-top-right-on-square class="h-3 w-3" />
+                                                View animals
+                                            </div>
+
+                                            <div class="breed-count-box">
+                                                <div
+                                                    class="breed-count-number location-count-number {{ $locationCount === 0 ? 'is-zero' : '' }}"
+                                                >
+                                                    {{ number_format($locationCount) }}
+                                                </div>
+
+                                                <div class="breed-count-label">
+                                                    Animals
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </a>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="breed-empty-state">
+                                No active physical locations found.
+                            </div>
+                        @endif
+
+                        <hr class="location-group-divider">
+
+                        <div
+                            class="location-subsection-head"
+                            style="--subsection-color: #7c3aed;"
+                        >
+                            <div class="location-subsection-title-wrap">
+                                <div class="location-subsection-icon">
+                                    <x-heroicon-o-user-group class="h-4 w-4" />
+                                </div>
+
+                                <div>
+                                    <div class="location-subsection-title">
+                                        Animal Groups
+                                    </div>
+
+                                    <div class="location-subsection-note">
+                                        Real manual and smart groups from the
+                                        Animal Groups module, including breeding,
+                                        feeding, sales, health, and location groups.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="location-subsection-count">
+                                {{ number_format($occupiedGroups) }} occupied
+                                · {{ number_format($totalGroupAnimals) }} memberships
+                            </div>
+                        </div>
+
+                        @if ($groupCards->isNotEmpty())
+                            <div class="breed-grid-compact">
+                                @foreach ($groupCards as $group)
+                                    @php
+                                        $groupName = $group->name
+                                            ?: 'Unnamed Animal Group';
+
+                                        $groupCode = $group->group_code
+                                            ?: 'GROUP-' . $group->id;
+
+                                        $groupCount = (int)
+                                            $group->active_members_count;
+
+                                        $groupColor = $locationColors[
+                                            ($loop->index + 3)
+                                            % count($locationColors)
+                                        ];
+
+                                        $groupTypeLabel = match (
+                                            $group->group_type
+                                        ) {
+                                            'manual' => 'Manual',
+                                            'dynamic' => 'Smart Dynamic',
+                                            'breeding' => 'Breeding',
+                                            'sales' => 'Sales',
+                                            'health' => 'Health',
+                                            'feeding' => 'Feeding',
+                                            'location' => 'Location',
+                                            default => str($group->group_type)
+                                                ->replace('_', ' ')
+                                                ->title()
+                                                ->toString(),
+                                        };
+
+                                        $scopeParts = collect([
+                                            $group->location?->name
+                                                ? 'Location: '
+                                                    . $group->location->name
+                                                : null,
+                                            $group->breed?->breed_name
+                                                ? 'Breed: '
+                                                    . $group->breed->breed_name
+                                                : null,
+                                            $group->sex
+                                                ? 'Sex: ' . $group->sex
+                                                : null,
+                                        ])->filter();
+
+                                        $groupScope = $scopeParts->isNotEmpty()
+                                            ? $scopeParts->implode(' · ')
+                                            : (
+                                                filled($group->purpose)
+                                                    ? $group->purpose
+                                                    : 'All active animals'
+                                            );
+
+                                        $groupAnimalsUrl =
+                                            \App\Filament\Resources\AnimalResource::getUrl(
+                                                'index',
+                                                [
+                                                    'tableFilters' => [
+                                                        'animal_group_id' => [
+                                                            'value' => (string)
+                                                                $group->id,
+                                                        ],
+                                                    ],
+                                                ]
+                                            );
+
+                                        $groupManageUrl =
+                                            \App\Filament\Resources\AnimalGroupResource::getUrl(
+                                                'edit',
+                                                [
+                                                    'record' => $group,
+                                                ]
+                                            );
+                                    @endphp
+
+                                    <div
+                                        class="animal-group-card"
+                                        style="--group-color: {{ $groupColor }};"
+                                    >
+                                        <div class="animal-group-main">
+                                            <div class="animal-group-icon">
+                                                @if ($group->auto_sync)
+                                                    <x-heroicon-o-arrow-path class="h-4 w-4" />
+                                                @else
+                                                    <x-heroicon-o-user-group class="h-4 w-4" />
+                                                @endif
+                                            </div>
+
+                                            <div class="animal-group-info">
+                                                <div
+                                                    class="animal-group-name"
+                                                    title="{{ $groupName }}"
+                                                >
+                                                    {{ $groupName }}
+                                                </div>
+
+                                                <div class="animal-group-code">
+                                                    {{ $groupCode }}
+                                                </div>
+
+                                                <div
+                                                    class="animal-group-scope"
+                                                    title="{{ $groupScope }}"
+                                                >
+                                                    {{ $groupScope }}
+                                                </div>
+
+                                                <div
+                                                    class="animal-group-type"
+                                                    title="{{ $groupTypeLabel }}"
+                                                >
+                                                    {{ $groupTypeLabel }}
+
+                                                    @if ($group->auto_sync)
+                                                        <span>· Auto</span>
+                                                    @endif
+                                                </div>
+                                            </div>
+
+                                            <div class="animal-group-count">
+                                                <div class="animal-group-count-value">
+                                                    {{ number_format($groupCount) }}
+                                                </div>
+
+                                                <div class="animal-group-count-label">
+                                                    Animals
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="animal-group-footer">
+                                            <div class="animal-group-actions">
+                                                <a
+                                                    href="{{ $groupAnimalsUrl }}"
+                                                    class="animal-group-action"
+                                                    title="View animals in {{ $groupName }}"
+                                                >
+                                                    <x-heroicon-o-eye class="h-3 w-3" />
+                                                    View animals
+                                                </a>
+
+                                                @can('edit animal groups')
+                                                    <a
+                                                        href="{{ $groupManageUrl }}"
+                                                        class="animal-group-action animal-group-action-secondary"
+                                                        title="Manage {{ $groupName }}"
+                                                    >
+                                                        <x-heroicon-o-pencil-square class="h-3 w-3" />
+                                                        Manage
+                                                    </a>
+                                                @endcan
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="breed-empty-state">
+                                No active animal groups found. Create a group in
+                                Livestock → Group(s), then add or auto-sync its
+                                animal members.
                             </div>
                         @endif
                     </div>
