@@ -33,3 +33,5 @@ LelekweKey
 LelekweKey.pub
 *.pem
 *.key
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
