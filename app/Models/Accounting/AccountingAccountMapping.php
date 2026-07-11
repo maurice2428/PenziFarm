@@ -11,15 +11,15 @@ class AccountingAccountMapping extends Model
     use HasFactory;
 
     protected $table = 'accounting_account_mappings';
-
     protected $guarded = [];
 
     protected $casts = [
         'is_required' => 'boolean',
+        'is_active' => 'boolean',
     ];
 
     public function account(): BelongsTo
     {
-        return $this->belongsTo(AccountingAccount::class, 'account_id');
+        return $this->belongsTo(AccountingAccount::class, 'account_id')->withTrashed();
     }
 }

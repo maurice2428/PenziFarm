@@ -131,8 +131,6 @@ Route::middleware(['web', 'auth'])->group(function () {
         )
         ->name('animal-lab-requests.pdf');
 });
-require __DIR__ . '/accounting-reports.php';
-require __DIR__ . '/accounting-reports.php';
 require __DIR__ . '/farm-activity-reports.php';
 
 /*
@@ -153,3 +151,7 @@ Route::get(
     ->name('audit-sessions.email-report.pdf');
 
 require __DIR__ . '/progeny.php';
+
+require __DIR__ . '/breeding-performance.php';
+
+require __DIR__ . '/accounting-reports.php';

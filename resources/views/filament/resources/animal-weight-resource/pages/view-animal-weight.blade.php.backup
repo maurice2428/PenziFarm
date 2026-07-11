@@ -1,0 +1,900 @@
+<x-filament-panels::page>
+    @php
+        $latestTrend = $summary['latest_trend'] ?? 'none';
+
+        $trendMeta = match ($latestTrend) {
+            'gaining' => [
+                'label' => 'Gaining',
+                'icon' => '↗',
+                'class' => 'trend-gaining',
+                'description' => 'The latest reading increased.',
+            ],
+            'losing' => [
+                'label' => 'Losing',
+                'icon' => '↘',
+                'class' => 'trend-losing',
+                'description' => 'The latest reading decreased.',
+            ],
+            'stable' => [
+                'label' => 'Stable',
+                'icon' => '→',
+                'class' => 'trend-stable',
+                'description' => 'No change from the previous reading.',
+            ],
+            'first' => [
+                'label' => 'First Reading',
+                'icon' => '●',
+                'class' => 'trend-first',
+                'description' => 'Only the baseline reading is available.',
+            ],
+            default => [
+                'label' => 'No Data',
+                'icon' => '—',
+                'class' => 'trend-none',
+                'description' => 'No active weight readings are available.',
+            ],
+        };
+
+        $formatWeight = static fn ($value): string =>
+            $value === null
+                ? '—'
+                : number_format((float) $value, 2) . ' KG';
+
+        $formatSignedWeight = static fn ($value): string =>
+            $value === null
+                ? '—'
+                : (((float) $value > 0 ? '+' : '')
+                    . number_format((float) $value, 2)
+                    . ' KG');
+
+        $totalChangeClass = match (true) {
+            ($summary['total_change'] ?? null) === null => 'metric-neutral',
+            (float) $summary['total_change'] > 0 => 'metric-success',
+            (float) $summary['total_change'] < 0 => 'metric-danger',
+            default => 'metric-warning',
+        };
+    @endphp
+
+    <style>
+        .weight-intelligence {
+            --wi-primary: {{ $primaryColor }};
+            --wi-secondary: {{ $secondaryColor }};
+            --wi-accent: {{ $accentColor }};
+            --wi-success: {{ $successColor }};
+            --wi-danger: {{ $dangerColor }};
+            --wi-border: rgba(148, 163, 184, .22);
+            --wi-muted: #64748b;
+            --wi-surface: rgba(255, 255, 255, .94);
+            --wi-soft: #f8fafc;
+            display: grid;
+            gap: 1.15rem;
+        }
+
+        .dark .weight-intelligence {
+            --wi-border: rgba(148, 163, 184, .18);
+            --wi-muted: #94a3b8;
+            --wi-surface: rgba(15, 23, 42, .92);
+            --wi-soft: rgba(30, 41, 59, .72);
+        }
+
+        .wi-hero {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid color-mix(in srgb, var(--wi-primary) 34%, transparent);
+            border-radius: 1.2rem;
+            padding: 1.35rem;
+            color: white;
+            background:
+                radial-gradient(circle at 88% 4%, rgba(255,255,255,.21), transparent 27%),
+                radial-gradient(circle at 8% 92%, color-mix(in srgb, var(--wi-accent) 38%, transparent), transparent 34%),
+                linear-gradient(125deg, var(--wi-primary), var(--wi-secondary));
+            box-shadow: 0 18px 42px color-mix(in srgb, var(--wi-primary) 20%, transparent);
+        }
+
+        .wi-hero::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px);
+            background-size: 28px 28px;
+            mask-image: linear-gradient(to bottom, black, transparent);
+        }
+
+        .wi-hero-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .wi-eyebrow {
+            font-size: .69rem;
+            font-weight: 900;
+            letter-spacing: .13em;
+            text-transform: uppercase;
+            opacity: .78;
+        }
+
+        .wi-title {
+            margin-top: .35rem;
+            font-size: clamp(1.35rem, 2.3vw, 2.15rem);
+            font-weight: 950;
+            letter-spacing: -.035em;
+        }
+
+        .wi-subtitle {
+            max-width: 760px;
+            margin-top: .45rem;
+            color: rgba(255,255,255,.82);
+            font-size: .84rem;
+            line-height: 1.55;
+        }
+
+        .wi-hero-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .42rem;
+            margin-top: .85rem;
+        }
+
+        .wi-hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .32rem;
+            padding: .4rem .62rem;
+            border: 1px solid rgba(255,255,255,.18);
+            border-radius: 999px;
+            background: rgba(255,255,255,.11);
+            backdrop-filter: blur(8px);
+            font-size: .68rem;
+            font-weight: 850;
+        }
+
+        .wi-latest {
+            min-width: 180px;
+            padding: .95rem 1rem;
+            border: 1px solid rgba(255,255,255,.2);
+            border-radius: 1rem;
+            background: rgba(255,255,255,.11);
+            backdrop-filter: blur(12px);
+            text-align: right;
+        }
+
+        .wi-latest-label {
+            font-size: .64rem;
+            font-weight: 850;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            opacity: .76;
+        }
+
+        .wi-latest-value {
+            margin-top: .26rem;
+            font-size: 1.75rem;
+            font-weight: 950;
+        }
+
+        .wi-latest-date {
+            margin-top: .22rem;
+            font-size: .69rem;
+            opacity: .78;
+        }
+
+        .wi-kpis {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .75rem;
+        }
+
+        .wi-card {
+            position: relative;
+            overflow: hidden;
+            min-width: 0;
+            border: 1px solid var(--wi-border);
+            border-radius: 1rem;
+            background: var(--wi-surface);
+            box-shadow: 0 10px 27px rgba(15,23,42,.055);
+        }
+
+        .wi-kpi {
+            padding: .92rem 1rem;
+        }
+
+        .wi-kpi::before {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 4px;
+            background: linear-gradient(to bottom, var(--wi-primary), var(--wi-secondary));
+        }
+
+        .wi-kpi-label {
+            color: var(--wi-muted);
+            font-size: .63rem;
+            font-weight: 900;
+            letter-spacing: .07em;
+            text-transform: uppercase;
+        }
+
+        .wi-kpi-value {
+            margin-top: .37rem;
+            color: #0f172a;
+            font-size: 1.25rem;
+            font-weight: 950;
+            letter-spacing: -.025em;
+        }
+
+        .dark .wi-kpi-value {
+            color: #f8fafc;
+        }
+
+        .wi-kpi-note {
+            margin-top: .28rem;
+            color: var(--wi-muted);
+            font-size: .68rem;
+            line-height: 1.35;
+        }
+
+        .metric-success .wi-kpi-value { color: var(--wi-success); }
+        .metric-danger .wi-kpi-value { color: var(--wi-danger); }
+        .metric-warning .wi-kpi-value { color: var(--wi-accent); }
+
+        .wi-section {
+            padding: 1rem;
+        }
+
+        .wi-section-heading {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: .8rem;
+            flex-wrap: wrap;
+        }
+
+        .wi-section-title {
+            color: #0f172a;
+            font-size: .95rem;
+            font-weight: 950;
+        }
+
+        .dark .wi-section-title {
+            color: #f8fafc;
+        }
+
+        .wi-section-description {
+            margin-top: .2rem;
+            color: var(--wi-muted);
+            font-size: .72rem;
+            line-height: 1.45;
+        }
+
+        .wi-trend-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .42rem .65rem;
+            border-radius: 999px;
+            font-size: .68rem;
+            font-weight: 900;
+        }
+
+        .trend-gaining {
+            color: var(--wi-success);
+            background: color-mix(in srgb, var(--wi-success) 11%, transparent);
+            border: 1px solid color-mix(in srgb, var(--wi-success) 28%, transparent);
+        }
+
+        .trend-losing {
+            color: var(--wi-danger);
+            background: color-mix(in srgb, var(--wi-danger) 10%, transparent);
+            border: 1px solid color-mix(in srgb, var(--wi-danger) 27%, transparent);
+        }
+
+        .trend-stable {
+            color: var(--wi-accent);
+            background: color-mix(in srgb, var(--wi-accent) 10%, transparent);
+            border: 1px solid color-mix(in srgb, var(--wi-accent) 27%, transparent);
+        }
+
+        .trend-first,
+        .trend-none {
+            color: var(--wi-muted);
+            background: rgba(148,163,184,.1);
+            border: 1px solid rgba(148,163,184,.24);
+        }
+
+        .wi-chart-shell {
+            overflow-x: auto;
+            border: 1px solid var(--wi-border);
+            border-radius: .9rem;
+            background:
+                linear-gradient(180deg, color-mix(in srgb, var(--wi-primary) 4%, transparent), transparent 52%),
+                var(--wi-soft);
+        }
+
+        .wi-chart {
+            display: block;
+            width: 100%;
+            min-width: 720px;
+            height: auto;
+        }
+
+        .wi-grid-line {
+            stroke: rgba(148,163,184,.25);
+            stroke-width: 1;
+            stroke-dasharray: 5 7;
+        }
+
+        .wi-axis-label {
+            fill: var(--wi-muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .wi-area {
+            fill: url(#wiAreaGradient);
+        }
+
+        .wi-line {
+            fill: none;
+            stroke: url(#wiLineGradient);
+            stroke-width: 5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            filter: drop-shadow(0 6px 8px color-mix(in srgb, var(--wi-primary) 23%, transparent));
+        }
+
+        .wi-point {
+            fill: white;
+            stroke: var(--wi-primary);
+            stroke-width: 4;
+        }
+
+        .wi-point.latest {
+            fill: var(--wi-accent);
+            stroke: white;
+            stroke-width: 4;
+        }
+
+        .wi-empty {
+            padding: 3rem 1rem;
+            text-align: center;
+            color: var(--wi-muted);
+        }
+
+        .wi-table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--wi-border);
+            border-radius: .9rem;
+        }
+
+        .wi-table {
+            width: 100%;
+            min-width: 840px;
+            border-collapse: collapse;
+        }
+
+        .wi-table th {
+            padding: .72rem .8rem;
+            color: white;
+            background: linear-gradient(120deg, var(--wi-primary), var(--wi-secondary));
+            font-size: .63rem;
+            font-weight: 900;
+            letter-spacing: .06em;
+            text-align: left;
+            text-transform: uppercase;
+        }
+
+        .wi-table td {
+            padding: .74rem .8rem;
+            border-bottom: 1px solid var(--wi-border);
+            color: #334155;
+            font-size: .72rem;
+            vertical-align: top;
+        }
+
+        .dark .wi-table td {
+            color: #cbd5e1;
+        }
+
+        .wi-table tbody tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .wi-table tbody tr:hover {
+            background: color-mix(in srgb, var(--wi-primary) 4%, transparent);
+        }
+
+        .wi-weight-value {
+            color: #0f172a;
+            font-size: .82rem;
+            font-weight: 950;
+        }
+
+        .dark .wi-weight-value {
+            color: #f8fafc;
+        }
+
+        .wi-diff-positive {
+            color: var(--wi-success);
+            font-weight: 900;
+        }
+
+        .wi-diff-negative {
+            color: var(--wi-danger);
+            font-weight: 900;
+        }
+
+        .wi-diff-neutral {
+            color: var(--wi-muted);
+            font-weight: 850;
+        }
+
+        .wi-remark {
+            max-width: 320px;
+            color: var(--wi-muted);
+            line-height: 1.45;
+        }
+
+        @media (min-width: 760px) {
+            .wi-kpis {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1280px) {
+            .wi-kpis {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 639px) {
+            .wi-hero {
+                padding: 1rem;
+                border-radius: 1rem;
+            }
+
+            .wi-latest {
+                width: 100%;
+                text-align: left;
+            }
+
+            .wi-section {
+                padding: .82rem;
+            }
+        }
+    </style>
+
+    <div class="weight-intelligence">
+        <section class="wi-hero">
+            <div class="wi-hero-content">
+                <div>
+                    <div class="wi-eyebrow">
+                        {{ $farmName }} · Weight Intelligence
+                    </div>
+
+                    <div class="wi-title">
+                        {{ $animal?->tag_number ?? 'Animal' }}
+                        Growth & Weight History
+                    </div>
+
+                    <div class="wi-subtitle">
+                        Complete chronological weight performance for this
+                        animal, including every active entry, change between
+                        readings, long-term growth, and the latest direction.
+                    </div>
+
+                    <div class="wi-hero-badges">
+                        <span class="wi-hero-badge">
+                            {{ $animal?->breed?->breed_name ?? 'Breed not recorded' }}
+                        </span>
+
+                        <span class="wi-hero-badge">
+                            {{ $animal?->species ?? 'Species not recorded' }}
+                        </span>
+
+                        <span class="wi-hero-badge">
+                            {{ $animal?->sex ?? 'Sex not recorded' }}
+                        </span>
+
+                        <span class="wi-hero-badge">
+                            {{ $animal?->location?->name ?? 'Location not recorded' }}
+                        </span>
+
+                        <span class="wi-hero-badge">
+                            {{ number_format($summary['record_count']) }}
+                            reading{{ $summary['record_count'] === 1 ? '' : 's' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="wi-latest">
+                    <div class="wi-latest-label">Latest Weight</div>
+                    <div class="wi-latest-value">
+                        {{ $formatWeight($summary['latest_weight']) }}
+                    </div>
+                    <div class="wi-latest-date">
+                        {{ $chartHistory->last()?->recorded_at?->format('d M Y, H:i') ?? 'No reading date' }}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="wi-kpis">
+            <article class="wi-card wi-kpi">
+                <div class="wi-kpi-label">First Weight</div>
+                <div class="wi-kpi-value">
+                    {{ $formatWeight($summary['first_weight']) }}
+                </div>
+                <div class="wi-kpi-note">Baseline reading</div>
+            </article>
+
+            <article class="wi-card wi-kpi {{ $totalChangeClass }}">
+                <div class="wi-kpi-label">Total Change</div>
+                <div class="wi-kpi-value">
+                    {{ $formatSignedWeight($summary['total_change']) }}
+                </div>
+                <div class="wi-kpi-note">
+                    First to latest reading
+                </div>
+            </article>
+
+            <article class="wi-card wi-kpi">
+                <div class="wi-kpi-label">Average Weight</div>
+                <div class="wi-kpi-value">
+                    {{ $formatWeight($summary['average_weight']) }}
+                </div>
+                <div class="wi-kpi-note">Across all entries</div>
+            </article>
+
+            <article class="wi-card wi-kpi">
+                <div class="wi-kpi-label">Weight Range</div>
+                <div class="wi-kpi-value">
+                    {{ $formatWeight($summary['minimum_weight']) }}
+                </div>
+                <div class="wi-kpi-note">
+                    Maximum:
+                    {{ $formatWeight($summary['maximum_weight']) }}
+                </div>
+            </article>
+
+            <article class="wi-card wi-kpi">
+                <div class="wi-kpi-label">Average Daily Gain</div>
+                <div class="wi-kpi-value">
+                    @if ($summary['average_daily_gain'] !== null)
+                        {{ number_format(
+                            (float) $summary['average_daily_gain'],
+                            3
+                        ) }} KG/day
+                    @else
+                        —
+                    @endif
+                </div>
+                <div class="wi-kpi-note">
+                    Across {{ number_format($summary['days_covered']) }} day(s)
+                </div>
+            </article>
+
+            <article class="wi-card wi-kpi">
+                <div class="wi-kpi-label">Latest Direction</div>
+                <div class="wi-kpi-value">
+                    {{ $trendMeta['icon'] }}
+                    {{ $trendMeta['label'] }}
+                </div>
+                <div class="wi-kpi-note">
+                    {{ $formatSignedWeight($summary['latest_difference']) }}
+                    from previous
+                </div>
+            </article>
+        </section>
+
+        <section class="wi-card wi-section">
+            <div class="wi-section-heading">
+                <div>
+                    <div class="wi-section-title">
+                        Complete Growth Trend
+                    </div>
+                    <div class="wi-section-description">
+                        Readings are plotted from the oldest to the newest.
+                        Hover over a point to see its date and exact weight.
+                    </div>
+                </div>
+
+                <span class="wi-trend-pill {{ $trendMeta['class'] }}">
+                    <span>{{ $trendMeta['icon'] }}</span>
+                    <span>
+                        {{ $trendMeta['label'] }}
+                    </span>
+                </span>
+            </div>
+
+            @if ($chartHistory->isEmpty())
+                <div class="wi-empty">
+                    No active weight records are available for this animal.
+                </div>
+            @else
+                <div class="wi-chart-shell">
+                    <svg
+                        class="wi-chart"
+                        viewBox="0 0 {{ $chart['width'] }} {{ $chart['height'] }}"
+                        preserveAspectRatio="xMidYMid meet"
+                        role="img"
+                        aria-label="Weight trend chart for {{ $animal?->tag_number }}"
+                    >
+                        <defs>
+                            <linearGradient
+                                id="wiLineGradient"
+                                x1="0%"
+                                y1="0%"
+                                x2="100%"
+                                y2="0%"
+                            >
+                                <stop
+                                    offset="0%"
+                                    stop-color="{{ $primaryColor }}"
+                                />
+                                <stop
+                                    offset="55%"
+                                    stop-color="{{ $secondaryColor }}"
+                                />
+                                <stop
+                                    offset="100%"
+                                    stop-color="{{ $accentColor }}"
+                                />
+                            </linearGradient>
+
+                            <linearGradient
+                                id="wiAreaGradient"
+                                x1="0%"
+                                y1="0%"
+                                x2="0%"
+                                y2="100%"
+                            >
+                                <stop
+                                    offset="0%"
+                                    stop-color="{{ $primaryColor }}"
+                                    stop-opacity=".28"
+                                />
+                                <stop
+                                    offset="100%"
+                                    stop-color="{{ $primaryColor }}"
+                                    stop-opacity=".015"
+                                />
+                            </linearGradient>
+                        </defs>
+
+                        @foreach ($chart['y_ticks'] as $tick)
+                            <line
+                                class="wi-grid-line"
+                                x1="{{ $chart['plot']['left'] }}"
+                                y1="{{ $tick['y'] }}"
+                                x2="{{ $chart['plot']['right'] }}"
+                                y2="{{ $tick['y'] }}"
+                            />
+
+                            <text
+                                class="wi-axis-label"
+                                x="{{ $chart['plot']['left'] - 13 }}"
+                                y="{{ $tick['y'] + 4 }}"
+                                text-anchor="end"
+                            >
+                                {{ number_format($tick['value'], 1) }}
+                            </text>
+                        @endforeach
+
+                        @foreach ($chart['x_labels'] as $label)
+                            <text
+                                class="wi-axis-label"
+                                x="{{ $label['x'] }}"
+                                y="{{ $chart['plot']['bottom'] + 33 }}"
+                                text-anchor="middle"
+                            >
+                                {{ $label['label'] }}
+                            </text>
+                        @endforeach
+
+                        @if ($chart['area'] !== '')
+                            <polygon
+                                class="wi-area"
+                                points="{{ $chart['area'] }}"
+                            />
+                        @endif
+
+                        @if ($chart['polyline'] !== '')
+                            <polyline
+                                class="wi-line"
+                                points="{{ $chart['polyline'] }}"
+                            />
+                        @endif
+
+                        @foreach ($chart['points'] as $index => $point)
+                            <g>
+                                <title>
+                                    {{ $point['date'] }}
+                                    ·
+                                    {{ number_format($point['weight'], 2) }}
+                                    KG
+                                </title>
+
+                                <circle
+                                    class="wi-point {{ $loop->last ? 'latest' : '' }}"
+                                    cx="{{ $point['x'] }}"
+                                    cy="{{ $point['y'] }}"
+                                    r="{{ $loop->last ? 8 : 6 }}"
+                                />
+                            </g>
+                        @endforeach
+
+                        <text
+                            class="wi-axis-label"
+                            x="18"
+                            y="{{ $chart['height'] / 2 }}"
+                            text-anchor="middle"
+                            transform="rotate(-90 18 {{ $chart['height'] / 2 }})"
+                        >
+                            Weight (KG)
+                        </text>
+                    </svg>
+                </div>
+            @endif
+        </section>
+
+        <section class="wi-card wi-section">
+            <div class="wi-section-heading">
+                <div>
+                    <div class="wi-section-title">
+                        All Weight Entries
+                    </div>
+                    <div class="wi-section-description">
+                        Every non-deleted reading recorded for
+                        {{ $animal?->tag_number ?? 'this animal' }},
+                        newest first.
+                    </div>
+                </div>
+            </div>
+
+            @if ($weightHistory->isEmpty())
+                <div class="wi-empty">
+                    No active weight history has been recorded.
+                </div>
+            @else
+                <div class="wi-table-wrap">
+                    <table class="wi-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Recorded At</th>
+                                <th>Weight</th>
+                                <th>Previous</th>
+                                <th>Change</th>
+                                <th>Trend</th>
+                                <th>Recorded By</th>
+                                <th>Remarks</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach ($weightHistory as $entry)
+                                @php
+                                    $difference =
+                                        $entry->calculated_difference;
+
+                                    $differenceClass = match (true) {
+                                        $difference === null =>
+                                            'wi-diff-neutral',
+                                        (float) $difference > 0 =>
+                                            'wi-diff-positive',
+                                        (float) $difference < 0 =>
+                                            'wi-diff-negative',
+                                        default =>
+                                            'wi-diff-neutral',
+                                    };
+
+                                    $entryTrend = match (
+                                        $entry->calculated_trend
+                                    ) {
+                                        'gaining' => [
+                                            'label' => 'Gaining',
+                                            'icon' => '↗',
+                                            'class' => 'trend-gaining',
+                                        ],
+                                        'losing' => [
+                                            'label' => 'Losing',
+                                            'icon' => '↘',
+                                            'class' => 'trend-losing',
+                                        ],
+                                        'stable' => [
+                                            'label' => 'Stable',
+                                            'icon' => '→',
+                                            'class' => 'trend-stable',
+                                        ],
+                                        default => [
+                                            'label' => 'First Entry',
+                                            'icon' => '●',
+                                            'class' => 'trend-first',
+                                        ],
+                                    };
+                                @endphp
+
+                                <tr>
+                                    <td>{{ $loop->iteration }}</td>
+
+                                    <td>
+                                        <strong>
+                                            {{ $entry->recorded_at?->format(
+                                                'd M Y'
+                                            ) ?? '—' }}
+                                        </strong>
+                                        <div class="wi-remark">
+                                            {{ $entry->recorded_at?->format(
+                                                'H:i'
+                                            ) ?? '' }}
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <span class="wi-weight-value">
+                                            {{ number_format(
+                                                (float) $entry->weight_kg,
+                                                2
+                                            ) }}
+                                            KG
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        {{ $entry->calculated_previous_weight
+                                            === null
+                                                ? '—'
+                                                : number_format(
+                                                    (float) $entry
+                                                        ->calculated_previous_weight,
+                                                    2
+                                                ) . ' KG' }}
+                                    </td>
+
+                                    <td>
+                                        <span class="{{ $differenceClass }}">
+                                            {{ $formatSignedWeight(
+                                                $difference
+                                            ) }}
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        <span
+                                            class="wi-trend-pill {{ $entryTrend['class'] }}"
+                                        >
+                                            {{ $entryTrend['icon'] }}
+                                            {{ $entryTrend['label'] }}
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        {{ $entry->recorder?->name
+                                            ?? 'System / Not recorded' }}
+                                    </td>
+
+                                    <td>
+                                        <div class="wi-remark">
+                                            {{ filled($entry->remarks)
+                                                ? $entry->remarks
+                                                : 'No remarks' }}
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </section>
+    </div>
+</x-filament-panels::page>

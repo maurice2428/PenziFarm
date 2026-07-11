@@ -2,38 +2,62 @@
 
 namespace App\Filament\Resources\Accounting;
 
-
 use App\Filament\Resources\Accounting\AccountingTaxSettingResource\Pages;
 use App\Models\Accounting\AccountingTaxSetting;
+use App\Services\Accounting\AccountingBulkExportService;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class AccountingTaxSettingResource extends Resource
 {
+    protected static ?string $model = AccountingTaxSetting::class;
+    protected static ?string $navigationIcon = 'heroicon-o-receipt-percent';
+    protected static ?string $navigationGroup = 'Kenya Tax & Compliance';
+    protected static ?string $navigationLabel = 'Tax Rules';
+    protected static ?int $navigationSort = 1;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Permission access
-    |--------------------------------------------------------------------------
-    | Controlled by permissions assigned in the User Permissions tabs.
-    | There is intentionally no hasRole() bypass here.
-    */
-    public static function shouldRegisterNavigation(): bool
-    {
-        return auth()->user()?->can('view accounting tax settings') ?? false;
-    }
+    public static function shouldRegisterNavigation(): bool { return auth()->user()?->can('view accounting tax settings') ?? false; }
+    public static function canViewAny(): bool { return static::shouldRegisterNavigation(); }
 
-    public static function canViewAny(): bool
+    public static function form(Form $form): Form
     {
-        return auth()->user()?->can('view accounting tax settings') ?? false;
-    }
-
-    public static function canView($record): bool
-    {
-        return auth()->user()?->can('view accounting tax settings') ?? false;
+        return $form->schema([
+            Forms\Components\Section::make('Kenya Tax Rule')->icon('heroicon-o-receipt-percent')
+                ->description('Rates are configurable by effective date. Verify changes against the current KRA law and your tax adviser before activation.')
+                ->columns(['default' => 1, 'md' => 2, 'xl' => 4])->schema([
+                    Forms\Components\TextInput::make('name')->required(),
+                    Forms\Components\TextInput::make('code')->required()->unique(ignoreRecord: true)->maxLength(50),
+                    Forms\Components\Select::make('type')->native(false)->required()->options([
+                        'vat' => 'VAT', 'withholding' => 'Withholding Tax', 'withholding_vat' => 'Withholding VAT',
+                        'corporation_tax' => 'Corporation Tax', 'turnover_tax' => 'Turnover Tax', 'paye' => 'PAYE',
+                        'nssf' => 'NSSF', 'shif' => 'SHIF', 'housing_levy' => 'Housing Levy', 'other' => 'Other',
+                    ]),
+                    Forms\Components\Select::make('tax_scope')->native(false)->options([
+                        'sales' => 'Sales / Output', 'purchases' => 'Purchases / Input', 'payments' => 'Payments',
+                        'payroll' => 'Payroll', 'corporate' => 'Corporate', 'general' => 'General',
+                    ])->default('general'),
+                    Forms\Components\TextInput::make('rate')->numeric()->minValue(0)->suffix('%'),
+                    Forms\Components\TextInput::make('resident_rate')->numeric()->minValue(0)->suffix('%'),
+                    Forms\Components\TextInput::make('non_resident_rate')->numeric()->minValue(0)->suffix('%'),
+                    Forms\Components\TextInput::make('fixed_amount')->numeric()->minValue(0)->prefix('KES'),
+                    Forms\Components\DatePicker::make('effective_from')->native(false),
+                    Forms\Components\DatePicker::make('effective_to')->native(false)->afterOrEqual('effective_from'),
+                    Forms\Components\TextInput::make('return_due_day')->numeric()->minValue(1)->maxValue(31),
+                    Forms\Components\TextInput::make('remittance_due_days')->numeric()->minValue(1)->maxValue(60),
+                    Forms\Components\Toggle::make('requires_etims')->label('eTIMS Evidence Required'),
+                    Forms\Components\Toggle::make('is_system')->label('System Rule'),
+                    Forms\Components\Toggle::make('is_default')->label('Default Rule'),
+                    Forms\Components\Toggle::make('is_active')->default(true),
+                    Forms\Components\TextInput::make('legal_reference')->columnSpan(['default' => 1, 'xl' => 2]),
+                    Forms\Components\Select::make('filing_frequency')->native(false)->options(['monthly'=>'Monthly','quarterly'=>'Quarterly','annual'=>'Annual','transactional'=>'Per Transaction']),
+                    Forms\Components\TextInput::make('kra_return_code'),
+                    Forms\Components\KeyValue::make('metadata')->columnSpanFull(),
+                ]),
+        ]);
     }
 
     public static function canCreate(): bool
@@ -48,91 +72,37 @@ class AccountingTaxSettingResource extends Resource
 
     public static function canDelete($record): bool
     {
-        return auth()->user()?->can('delete accounting tax settings') ?? false;
+        return false;
     }
 
-    public static function canDeleteAny(): bool
+    public static function table(Table $table): Table
     {
-        return auth()->user()?->can('delete accounting tax settings') ?? false;
+        return $table->defaultSort('type')->columns([
+            Tables\Columns\TextColumn::make('code')->searchable()->weight('bold')->copyable(),
+            Tables\Columns\TextColumn::make('name')->searchable(),
+            Tables\Columns\TextColumn::make('type')->badge(),
+            Tables\Columns\TextColumn::make('tax_scope')->label('Scope')->badge(),
+            Tables\Columns\TextColumn::make('rate')->suffix('%')->placeholder('Variable'),
+            Tables\Columns\TextColumn::make('resident_rate')->label('Resident')->suffix('%')->placeholder('-'),
+            Tables\Columns\TextColumn::make('non_resident_rate')->label('Non-resident')->suffix('%')->placeholder('-'),
+            Tables\Columns\TextColumn::make('effective_from')->date('d M Y')->placeholder('Always'),
+            Tables\Columns\TextColumn::make('effective_to')->date('d M Y')->placeholder('Open-ended'),
+            Tables\Columns\IconColumn::make('requires_etims')->boolean()->label('eTIMS'),
+            Tables\Columns\IconColumn::make('is_active')->boolean(),
+        ])->filters([
+            Tables\Filters\SelectFilter::make('type')->options([
+                'vat' => 'VAT', 'withholding' => 'Withholding Tax', 'withholding_vat' => 'Withholding VAT', 'corporation_tax' => 'Corporation Tax', 'turnover_tax' => 'Turnover Tax', 'paye' => 'PAYE', 'other' => 'Other',
+            ]),
+            Tables\Filters\TernaryFilter::make('is_active'),
+        ])->actions([Tables\Actions\EditAction::make()])
+        ->bulkActions([
+            Tables\Actions\BulkAction::make('activate')->label('Activate Selected')->color('success')->icon('heroicon-o-play')->action(fn (Collection $records) => $records->each->update(['is_active' => true]))->deselectRecordsAfterCompletion(),
+            Tables\Actions\BulkAction::make('deactivate')->label('Deactivate Selected')->color('warning')->icon('heroicon-o-pause')->action(fn (Collection $records) => $records->each->update(['is_active' => false]))->deselectRecordsAfterCompletion(),
+            Tables\Actions\BulkAction::make('exportSelected')->label('Export Selected')->icon('heroicon-o-arrow-down-tray')->color('gray')->action(fn (Collection $records) => app(AccountingBulkExportService::class)->csv($records, [
+                'Code' => 'code', 'Name' => 'name', 'Type' => 'type', 'Scope' => 'tax_scope', 'Rate' => 'rate', 'Resident Rate' => 'resident_rate', 'Nonresident Rate' => 'non_resident_rate', 'Effective From' => fn ($r) => $r->effective_from?->format('Y-m-d'), 'Effective To' => fn ($r) => $r->effective_to?->format('Y-m-d'), 'Active' => 'is_active',
+            ], 'tax-rules-' . now()->format('Ymd_His') . '.csv')),
+        ]);
     }
 
-    public static function canRestore($record): bool
-    {
-        return auth()->user()?->can('restore accounting tax settings') ?? false;
-    }
-
-    public static function canRestoreAny(): bool
-    {
-        return auth()->user()?->can('restore accounting tax settings') ?? false;
-    }
-
-    public static function canForceDelete($record): bool
-    {
-        return auth()->user()?->can('force delete accounting tax settings') ?? false;
-    }
-
-    public static function canForceDeleteAny(): bool
-    {
-        return auth()->user()?->can('force delete accounting tax settings') ?? false;
-    }
-	protected static ?string $model = AccountingTaxSetting::class;
-	protected static ?string $navigationIcon = 'heroicon-o-scale';
-	protected static ?string $navigationGroup = 'Accounting';
-	protected static ?string $navigationLabel = 'Tax Setting(s)';
-	protected static ?int $navigationSort = 7;
-	
-	public static function form(Form $form): Form
-	{
-		return $form->schema([
-			Forms\Components\Section::make('Tax / Statutory Setting')
-			->columns(3)
-			->schema([
-				Forms\Components\TextInput::make('name')->required(),
-					 Forms\Components\TextInput::make('code')->required()->unique(ignoreRecord: true),
-					 Forms\Components\Select::make('type')->required()->options([
-						 'vat' => 'VAT',
-						 'paye' => 'PAYE',
-						 'nssf' => 'NSSF',
-						 'shif' => 'SHIF/SHA',
-						 'housing_levy' => 'Affordable Housing Levy',
-						 'withholding' => 'Withholding Tax',
-						 'other' => 'Other',
-					 ])->default('other'),
-					 Forms\Components\TextInput::make('rate')->numeric()->suffix('%'),
-					 Forms\Components\TextInput::make('fixed_amount')->numeric()->prefix('KES'),
-					 Forms\Components\Toggle::make('is_active')->default(true),
-					 Forms\Components\DatePicker::make('effective_from'),
-					 Forms\Components\DatePicker::make('effective_to'),
-					 Forms\Components\KeyValue::make('metadata')->columnSpanFull(),
-			]),
-		]);
-	}
-	
-	public static function table(Table $table): Table
-	{
-		return $table
-		->defaultSort('type')
-		->columns([
-			Tables\Columns\TextColumn::make('type')->badge()->sortable(),
-				  Tables\Columns\TextColumn::make('code')->searchable()->sortable()->weight('bold'),
-				  Tables\Columns\TextColumn::make('name')->searchable(),
-				  Tables\Columns\TextColumn::make('rate')->suffix('%'),
-				  Tables\Columns\TextColumn::make('fixed_amount')->money('KES'),
-				  Tables\Columns\TextColumn::make('effective_from')->date(),
-				  Tables\Columns\IconColumn::make('is_active')->boolean(),
-		])
-		->actions([
-			Tables\Actions\EditAction::make(),
-				  Tables\Actions\DeleteAction::make(),
-		]);
-	}
-	
-	public static function getPages(): array
-	{
-		return [
-			'index' => Pages\ListAccountingTaxSettings::route('/'),
-			'create' => Pages\CreateAccountingTaxSetting::route('/create'),
-			'edit' => Pages\EditAccountingTaxSetting::route('/{record}/edit'),
-		];
-	}
+    public static function getPages(): array { return ['index' => Pages\ListAccountingTaxSettings::route('/'), 'create' => Pages\CreateAccountingTaxSetting::route('/create'), 'edit' => Pages\EditAccountingTaxSetting::route('/{record}/edit')]; }
 }

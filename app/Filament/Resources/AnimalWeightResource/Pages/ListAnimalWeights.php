@@ -1018,6 +1018,10 @@ class ListAnimalWeights extends ListRecords
                 ->color('success'),
         ];
     }
+    public function getHeaderWidgetsColumns(): int|string|array
+{
+    return 1;
+}
 
     protected function getHeaderWidgets(): array
     {

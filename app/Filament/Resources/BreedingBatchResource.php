@@ -6,6 +6,7 @@ use App\Filament\Resources\BreedingBatchResource\RelationManagers\RecordsRelatio
 use App\Filament\Resources\BreedingBatchResource\Pages;
 use App\Models\Animal;
 use App\Models\BreedingBatch;
+use App\Services\Breeding\BreedingBatchLifecycleService;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
@@ -16,6 +17,8 @@ use Filament\Forms;
 use Filament\Tables;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\HtmlString;
 
 class BreedingBatchResource extends Resource
 
@@ -24,7 +27,7 @@ class BreedingBatchResource extends Resource
 
     protected static ?string $navigationGroup = 'Breeding Management';
 
-    protected static ?string $navigationLabel = 'Breeding Batches';
+    protected static ?string $navigationLabel = 'Batches';
 
     protected static ?string $modelLabel = 'Breeding Batch';
 
@@ -80,6 +83,14 @@ class BreedingBatchResource extends Resource
             auth()->user()?->hasRole('Admin') ||
             auth()->user()?->hasRole('Administrator') ||
             false;
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
     }
 
     public static function form(Form $form): Form
@@ -307,6 +318,20 @@ class BreedingBatchResource extends Resource
                         'cancelled' => 'danger',
                         default => 'gray',
                     }),
+                Tables\Columns\TextColumn::make('deleted_at')
+                    ->label('Archived At')
+                    ->dateTime('d M Y, H:i')
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('archive_reason')
+                    ->label('Archive Reason')
+                    ->limit(45)
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                Tables\Filters\TrashedFilter::make()
+                    ->label('Archived batches'),
             ])
             ->actions([
                 Tables\Actions\Action::make('printBatch')
@@ -317,11 +342,14 @@ class BreedingBatchResource extends Resource
                         'ids' => $record->id,
                     ]))
                     ->openUrlInNewTab()
-                    ->visible(fn(): bool =>
-                        auth()->user()?->can('print breeding batches') ||
-                        auth()->user()?->can('view breeding batches') ||
-                        auth()->user()?->hasRole('Admin') ||
-                        auth()->user()?->hasRole('Administrator')),
+                    ->visible(fn(BreedingBatch $record): bool =>
+                        ! $record->trashed()
+                        && (
+                            auth()->user()?->can('print breeding batches')
+                            || auth()->user()?->can('view breeding batches')
+                            || auth()->user()?->hasRole('Admin')
+                            || auth()->user()?->hasRole('Administrator')
+                        )),
                 /*Tables\Actions\Action::make('records')
                     ->label('Records')
                     ->icon('heroicon-o-list-bullet')
@@ -336,10 +364,172 @@ class BreedingBatchResource extends Resource
                     ->url(fn(BreedingBatch $record): string => static::getUrl('edit', [
                         'record' => $record,
                     ])),*/
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make()
+                Tables\Actions\EditAction::make()
+                    ->visible(
+                        fn (BreedingBatch $record): bool =>
+                            ! $record->trashed()
+                    ),
+
+                Tables\Actions\Action::make('manageLifecycle')
+                    ->label('Archive / Delete')
+                    ->icon('heroicon-o-archive-box')
+                    ->color('danger')
+                    ->visible(
+                        fn (BreedingBatch $record): bool =>
+                            ! $record->trashed()
+                            && static::canDelete($record)
+                    )
+                    ->modalWidth('2xl')
+                    ->modalHeading(
+                        fn (BreedingBatch $record): string =>
+                            'Archive or permanently delete '
+                            . $record->batch_number
+                    )
+                    ->modalDescription(
+                        fn (BreedingBatch $record): HtmlString =>
+                            static::lifecycleSummaryHtml($record)
+                    )
+                    ->form([
+                        Forms\Components\Radio::make('disposition')
+                            ->label('What should happen to this batch?')
+                            ->options([
+                                'archive' =>
+                                    'Archive batch and all breeding outcomes',
+                                'permanent_delete' =>
+                                    'Permanently delete this empty batch',
+                            ])
+                            ->descriptions([
+                                'archive' =>
+                                    'Recommended. Removes the batch and all '
+                                    . 'its animals from Breeding Outcomes, '
+                                    . 'but preserves history for restoration.',
+                                'permanent_delete' =>
+                                    'Only allowed when the batch has no '
+                                    . 'completed delivery or registered '
+                                    . 'offspring. This cannot be undone.',
+                            ])
+                            ->default('archive')
+                            ->live()
+                            ->required(),
+
+                        Forms\Components\Textarea::make('reason')
+                            ->label('Archive reason')
+                            ->rows(3)
+                            ->maxLength(1000)
+                            ->required(
+                                fn (Get $get): bool =>
+                                    $get('disposition') === 'archive'
+                            )
+                            ->visible(
+                                fn (Get $get): bool =>
+                                    $get('disposition') === 'archive'
+                            ),
+                    ])
+                    ->modalSubmitActionLabel('Continue')
+                    ->action(function (
+                        BreedingBatch $record,
+                        array $data
+                    ): void {
+                        $service = app(
+                            BreedingBatchLifecycleService::class
+                        );
+
+                        if (
+                            ($data['disposition'] ?? 'archive')
+                            === 'permanent_delete'
+                        ) {
+                            $service->permanentlyDelete($record);
+
+                            Notification::make()
+                                ->title('Breeding batch permanently deleted')
+                                ->body(
+                                    'The empty batch and all of its '
+                                    . 'breeding outcome rows were removed.'
+                                )
+                                ->success()
+                                ->send();
+
+                            return;
+                        }
+
+                        $service->archive(
+                            $record,
+                            $data['reason'] ?? null
+                        );
+
+                        Notification::make()
+                            ->title('Breeding batch archived')
+                            ->body(
+                                'The batch and all associated breeding '
+                                . 'outcomes are now hidden. They can be '
+                                . 'restored from Archived batches.'
+                            )
+                            ->success()
+                            ->send();
+                    }),
+
+                Tables\Actions\Action::make('restoreBatch')
+                    ->label('Restore')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('success')
                     ->requiresConfirmation()
-                    ->visible(fn($record): bool => static::canDelete($record)),
+                    ->modalHeading('Restore breeding batch')
+                    ->modalDescription(
+                        'This restores the batch and every breeding '
+                        . 'outcome archived with it.'
+                    )
+                    ->visible(
+                        fn (BreedingBatch $record): bool =>
+                            $record->trashed()
+                            && static::canDelete($record)
+                    )
+                    ->action(function (
+                        BreedingBatch $record
+                    ): void {
+                        app(BreedingBatchLifecycleService::class)
+                            ->restore($record);
+
+                        Notification::make()
+                            ->title('Breeding batch restored')
+                            ->body(
+                                'All associated breeding outcomes are '
+                                . 'visible again.'
+                            )
+                            ->success()
+                            ->send();
+                    }),
+
+                Tables\Actions\Action::make(
+                    'permanentlyDeleteArchived'
+                )
+                    ->label('Delete permanently')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalHeading(
+                        'Permanently delete archived batch'
+                    )
+                    ->modalDescription(
+                        fn (BreedingBatch $record): HtmlString =>
+                            static::lifecycleSummaryHtml($record)
+                    )
+                    ->modalSubmitActionLabel('Delete permanently')
+                    ->visible(
+                        fn (BreedingBatch $record): bool =>
+                            $record->trashed()
+                            && static::canDelete($record)
+                    )
+                    ->action(function (
+                        BreedingBatch $record
+                    ): void {
+                        app(BreedingBatchLifecycleService::class)
+                            ->permanentlyDelete($record);
+
+                        Notification::make()
+                            ->title('Archived batch permanently deleted')
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -378,6 +568,74 @@ class BreedingBatchResource extends Resource
                             auth()->user()?->hasRole('Administrator')),
                 ]),
             ]);
+    }
+
+    public static function lifecycleSummaryHtml(
+        BreedingBatch $record
+    ): HtmlString {
+        $summary = app(
+            BreedingBatchLifecycleService::class
+        )->summary($record);
+
+        $permanentMessage = $summary['can_permanently_delete']
+            ? '<span style="color:#15803d;font-weight:700">'
+                . 'Permanent deletion is currently allowed.'
+                . '</span>'
+            : '<span style="color:#b91c1c;font-weight:700">'
+                . 'Permanent deletion is blocked. Archive this batch.'
+                . '</span>';
+
+        return new HtmlString(
+            '<div style="display:grid;gap:10px">'
+            . '<div style="padding:12px;border:1px solid #d1d5db;'
+            . 'border-left:5px solid #14532d;background:#f8fafc">'
+            . '<strong>' . e($record->name) . '</strong><br>'
+            . '<span style="color:#64748b">'
+            . e($record->batch_number) . '</span></div>'
+            . '<div style="display:grid;grid-template-columns:'
+            . 'repeat(3,minmax(0,1fr));gap:8px">'
+            . static::summaryBox(
+                'Breeding outcomes',
+                $summary['records']
+            )
+            . static::summaryBox(
+                'Delivered',
+                $summary['delivered_records']
+            )
+            . static::summaryBox(
+                'Registered offspring',
+                $summary['registered_offspring']
+            )
+            . static::summaryBox(
+                'Abortions',
+                $summary['aborted_records']
+            )
+            . static::summaryBox(
+                'Live births',
+                $summary['live_births']
+            )
+            . static::summaryBox(
+                'Stillborn',
+                $summary['stillborn']
+            )
+            . '</div>'
+            . '<div style="padding:10px;border:1px solid #e5e7eb;'
+            . 'background:#fff">' . $permanentMessage . '</div>'
+            . '</div>'
+        );
+    }
+
+    private static function summaryBox(
+        string $label,
+        int $value
+    ): string {
+        return '<div style="padding:9px;border:1px solid #e5e7eb;'
+            . 'background:#fff">'
+            . '<div style="font-size:10px;color:#64748b;'
+            . 'text-transform:uppercase">' . e($label) . '</div>'
+            . '<div style="font-size:18px;font-weight:800;color:#111827">'
+            . number_format($value)
+            . '</div></div>';
     }
 
     public static function maleOptions(): array

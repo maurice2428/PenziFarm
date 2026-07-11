@@ -2,10 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 class PurchaseOrderPayment extends Model
 {
@@ -15,20 +16,34 @@ class PurchaseOrderPayment extends Model
         'purchase_order_id',
         'payment_number',
         'payment_date',
+        'paid_at',
         'amount',
         'payment_method',
         'status',
         'mpesa_reference',
+        'mpesa_phone',
+        'mpesa_receipt_number',
+        'mpesa_merchant_request_id',
+        'mpesa_checkout_request_id',
+        'mpesa_result_code',
+        'mpesa_result_description',
+        'mpesa_callback_payload',
         'bank_name',
         'bank_reference',
         'cheque_number',
         'notes',
+        'reversed_at',
+        'reversed_by',
+        'reversal_reason',
         'created_by',
     ];
 
     protected $casts = [
         'payment_date' => 'date',
+        'paid_at' => 'datetime',
         'amount' => 'decimal:2',
+        'mpesa_callback_payload' => 'array',
+        'reversed_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -46,8 +61,40 @@ class PurchaseOrderPayment extends Model
                 $record->status = 'successful';
             }
 
+            if (blank($record->paid_at)) {
+                $record->paid_at = now('Africa/Nairobi');
+            }
+
             if (blank($record->payment_date)) {
-                $record->payment_date = now('Africa/Nairobi')->toDateString();
+                $record->payment_date = Carbon::parse(
+                    $record->paid_at,
+                    'Africa/Nairobi'
+                )->toDateString();
+            }
+
+            if (
+                blank($record->mpesa_reference)
+                && filled($record->mpesa_receipt_number)
+            ) {
+                $record->mpesa_reference =
+                    $record->mpesa_receipt_number;
+            }
+        });
+
+        static::saving(function (PurchaseOrderPayment $record): void {
+            if (filled($record->paid_at)) {
+                $record->payment_date = Carbon::parse(
+                    $record->paid_at,
+                    'Africa/Nairobi'
+                )->toDateString();
+            }
+
+            if (
+                blank($record->mpesa_reference)
+                && filled($record->mpesa_receipt_number)
+            ) {
+                $record->mpesa_reference =
+                    $record->mpesa_receipt_number;
             }
         });
 
@@ -87,6 +134,11 @@ class PurchaseOrderPayment extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function reversedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reversed_by');
+    }
+
     public function scopeSuccessful(Builder $query): Builder
     {
         return $query->whereIn('status', [
@@ -107,10 +159,26 @@ class PurchaseOrderPayment extends Model
 
     public function getPaymentReferenceAttribute(): string
     {
-        return $this->mpesa_reference
-            ?: ($this->bank_reference
-                ?: ($this->cheque_number
-                    ?: '-'));
+        return $this->mpesa_receipt_number
+            ?: ($this->mpesa_reference
+                ?: ($this->bank_reference
+                    ?: ($this->cheque_number ?: '-')));
+    }
+
+    public function getTransactionDateTimeAttribute(): ?Carbon
+    {
+        if ($this->paid_at) {
+            return $this->paid_at;
+        }
+
+        if ($this->payment_date) {
+            return Carbon::parse(
+                $this->payment_date->format('Y-m-d'),
+                'Africa/Nairobi'
+            )->startOfDay();
+        }
+
+        return null;
     }
 
     public function getVoucherNumberAttribute(): string
@@ -147,5 +215,23 @@ class PurchaseOrderPayment extends Model
             'approved',
             'completed',
         ], true);
+    }
+
+    public function getCanBeReversedAttribute(): bool
+    {
+        return $this->is_successful
+            && blank($this->reversed_at)
+            && $this->status !== 'reversed';
+    }
+
+    public function getCanBeDeletedSafelyAttribute(): bool
+    {
+        return ! $this->is_successful
+            && blank($this->reversed_at)
+            && in_array(
+                $this->status,
+                ['pending', 'failed', 'cancelled'],
+                true
+            );
     }
 }

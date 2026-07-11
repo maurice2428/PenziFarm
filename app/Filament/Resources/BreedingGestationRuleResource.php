@@ -17,7 +17,7 @@ class BreedingGestationRuleResource extends Resource
 
     protected static ?string $navigationGroup = 'Breeding Management';
 
-    protected static ?string $navigationLabel = 'Gestation Rules';
+    protected static ?string $navigationLabel = 'Gestation Rule(s)';
 
     protected static ?string $navigationIcon = 'heroicon-o-calendar-days';
 

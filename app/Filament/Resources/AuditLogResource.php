@@ -20,7 +20,7 @@ class AuditLogResource extends Resource
 
     protected static ?string $navigationGroup = 'Audit Logs';
 
-    protected static ?string $navigationLabel = 'Audit Logs';
+    protected static ?string $navigationLabel = 'Log(s)';
 
     protected static ?string $modelLabel = 'Audit Log';
 

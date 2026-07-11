@@ -5,6 +5,7 @@ namespace App\Models\HR;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PayrollItem extends Model
 {
@@ -20,11 +21,15 @@ class PayrollItem extends Model
         'taxable_pay',
         'paye',
         'nssf',
+        'employer_nssf',
         'sha',
         'housing_levy',
+        'employer_housing_levy',
         'salary_advance_deduction',
         'other_deductions',
         'net_pay',
+        'paid_amount',
+        'payment_status',
         'days_worked',
         'leave_days',
         'absent_days',
@@ -39,11 +44,14 @@ class PayrollItem extends Model
         'taxable_pay' => 'decimal:2',
         'paye' => 'decimal:2',
         'nssf' => 'decimal:2',
+        'employer_nssf' => 'decimal:2',
         'sha' => 'decimal:2',
         'housing_levy' => 'decimal:2',
+        'employer_housing_levy' => 'decimal:2',
         'salary_advance_deduction' => 'decimal:2',
         'other_deductions' => 'decimal:2',
         'net_pay' => 'decimal:2',
+        'paid_amount' => 'decimal:2',
         'days_worked' => 'decimal:2',
         'leave_days' => 'decimal:2',
         'absent_days' => 'decimal:2',
@@ -57,5 +65,22 @@ class PayrollItem extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function paymentItems(): HasMany
+    {
+        return $this->hasMany(PayrollPaymentItem::class);
+    }
+
+    public function getOutstandingAmountAttribute(): float
+    {
+        return round(
+            max(
+                0,
+                (float) $this->net_pay
+                - (float) $this->paid_amount
+            ),
+            2
+        );
     }
 }

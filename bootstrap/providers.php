@@ -6,4 +6,5 @@ return [
     App\Providers\AuditTrackerServiceProvider::class,
     App\Providers\Filament\AdminPanelProvider::class,
     App\Providers\AuditTrackerServiceProvider::class,
+    App\Providers\AccountingEventServiceProvider::class,
 ];

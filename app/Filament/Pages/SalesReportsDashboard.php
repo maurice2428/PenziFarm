@@ -22,7 +22,7 @@ class SalesReportsDashboard extends Page implements Forms\Contracts\HasForms
     protected static ?string $navigationGroup = 'Sales';
     protected static ?string $navigationLabel = ' Reports';
     protected static ?string $title = 'Sales Reports Dashboard';
-    protected static ?int $navigationSort = 20;
+    protected static ?int $navigationSort = 7;
     protected static string $view = 'filament.pages.sales-reports-dashboard';
 
     public ?array $filters = [];

@@ -22,7 +22,7 @@ class AuditSessionResource extends Resource
 
     protected static ?string $navigationGroup = 'Audit Logs';
 
-    protected static ?string $navigationLabel = 'Sessions';
+    protected static ?string $navigationLabel = 'Session(s)';
 
     protected static ?string $modelLabel = 'Audit Session';
 

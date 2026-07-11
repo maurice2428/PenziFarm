@@ -23,6 +23,11 @@ class PurchaseOrderReceiptItem extends Model
         'batch_number',
         'expiry_date',
         'rejection_reason',
+        'rejection_disposition',
+        'rejection_status',
+        'rejection_reference',
+        'rejection_resolved_at',
+        'rejection_resolved_by',
         'notes',
     ];
 
@@ -35,11 +40,15 @@ class PurchaseOrderReceiptItem extends Model
         'unit_cost' => 'decimal:2',
         'line_total' => 'decimal:2',
         'expiry_date' => 'date',
+        'rejection_resolved_at' => 'datetime',
     ];
 
     public function receipt()
     {
-        return $this->belongsTo(PurchaseOrderReceipt::class, 'purchase_order_receipt_id');
+        return $this->belongsTo(
+            PurchaseOrderReceipt::class,
+            'purchase_order_receipt_id'
+        );
     }
 
     public function purchaseOrderItem()
@@ -50,5 +59,34 @@ class PurchaseOrderReceiptItem extends Model
     public function inventoryItem()
     {
         return $this->belongsTo(InventoryItem::class);
+    }
+
+    public function rejectionResolvedBy()
+    {
+        return $this->belongsTo(
+            User::class,
+            'rejection_resolved_by'
+        );
+    }
+
+    public function getRejectionDispositionLabelAttribute(): string
+    {
+        return str($this->rejection_disposition ?: 'none')
+            ->replace('_', ' ')
+            ->title()
+            ->toString();
+    }
+
+    public function getClosesOrderBalanceAttribute(): bool
+    {
+        return in_array(
+            $this->rejection_disposition,
+            [
+                'supplier_credit_note',
+                'supplier_refund',
+                'accepted_short_delivery',
+            ],
+            true
+        );
     }
 }

@@ -3,25 +3,57 @@
 namespace App\Services\Accounting;
 
 use App\Models\Accounting\AccountingAccount;
+use App\Models\Accounting\AccountingAccountMapping;
 use App\Models\Accounting\AccountingJournalEntryLine;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class AccountingReportService
 {
-    public function trialBalance(?string $from = null, ?string $to = null): Collection
-    {
-        $fromDate = $from ? Carbon::parse($from)->toDateString() : null;
-        $toDate = $to ? Carbon::parse($to)->toDateString() : now()->toDateString();
+    public function trialBalance(
+        ?string $from = null,
+        ?string $to = null
+    ): Collection {
+        $fromDate = $from
+            ? Carbon::parse($from)->toDateString()
+            : null;
+
+        $toDate = $to
+            ? Carbon::parse($to)->toDateString()
+            : now('Africa/Nairobi')->toDateString();
 
         $lines = AccountingJournalEntryLine::query()
-            ->select('account_id', DB::raw('SUM(debit) as debits'), DB::raw('SUM(credit) as credits'))
-            ->whereHas('journalEntry', function ($query) use ($fromDate, $toDate) {
-                $query->where('status', 'posted')
-                    ->when($fromDate, fn ($q) => $q->whereDate('transaction_date', '>=', $fromDate))
-                    ->whereDate('transaction_date', '<=', $toDate);
-            })
+            ->select(
+                'account_id',
+                DB::raw('SUM(debit) as debits'),
+                DB::raw('SUM(credit) as credits')
+            )
+            ->whereHas(
+                'journalEntry',
+                function ($query) use (
+                    $fromDate,
+                    $toDate
+                ): void {
+                    $query
+                        ->where('status', 'posted')
+                        ->when(
+                            $fromDate,
+                            fn ($query) =>
+                                $query->whereDate(
+                                    'transaction_date',
+                                    '>=',
+                                    $fromDate
+                                )
+                        )
+                        ->whereDate(
+                            'transaction_date',
+                            '<=',
+                            $toDate
+                        );
+                }
+            )
             ->groupBy('account_id')
             ->get()
             ->keyBy('account_id');
@@ -30,102 +62,469 @@ class AccountingReportService
             ->active()
             ->orderBy('code')
             ->get()
-            ->map(function (AccountingAccount $account) use ($lines) {
-                $line = $lines->get($account->id);
-                $debits = round((float) ($line->debits ?? 0), 2);
-                $credits = round((float) ($line->credits ?? 0), 2);
-                $balance = $account->signedBalance($debits, $credits);
+            ->map(function (
+                AccountingAccount $account
+            ) use ($lines): array {
+                $line = $lines->get(
+                    $account->getKey()
+                );
+
+                $debits = round(
+                    (float) ($line->debits ?? 0),
+                    2
+                );
+
+                $credits = round(
+                    (float) ($line->credits ?? 0),
+                    2
+                );
+
+                $balance = $account->signedBalance(
+                    $debits,
+                    $credits
+                );
 
                 return [
-                    'account_id' => $account->id,
+                    'account_id' =>
+                        $account->getKey(),
+
                     'code' => $account->code,
                     'name' => $account->name,
                     'type' => $account->type,
-                    'normal_balance' => $account->normal_balance,
+
+                    'normal_balance' =>
+                        $account->normal_balance,
+
                     'debits' => $debits,
                     'credits' => $credits,
                     'balance' => $balance,
-                    'debit_balance' => $account->normal_balance === 'debit' ? max($balance, 0) : max(-$balance, 0),
-                    'credit_balance' => $account->normal_balance === 'credit' ? max($balance, 0) : max(-$balance, 0),
+
+                    'debit_balance' =>
+                        $account->normal_balance === 'debit'
+                            ? max($balance, 0)
+                            : max(-$balance, 0),
+
+                    'credit_balance' =>
+                        $account->normal_balance === 'credit'
+                            ? max($balance, 0)
+                            : max(-$balance, 0),
                 ];
-            });
+            })
+            ->values();
     }
 
-    public function generalLedger(int $accountId, ?string $from = null, ?string $to = null): Collection
-    {
-        $fromDate = $from ? Carbon::parse($from)->toDateString() : null;
-        $toDate = $to ? Carbon::parse($to)->toDateString() : now()->toDateString();
-        $account = AccountingAccount::findOrFail($accountId);
+    public function generalLedger(
+        int $accountId,
+        ?string $from = null,
+        ?string $to = null
+    ): Collection {
+        $fromDate = $from
+            ? Carbon::parse($from)->toDateString()
+            : null;
+
+        $toDate = $to
+            ? Carbon::parse($to)->toDateString()
+            : now('Africa/Nairobi')->toDateString();
+
+        $account = AccountingAccount::query()
+            ->findOrFail($accountId);
+
         $runningBalance = 0.0;
 
         return AccountingJournalEntryLine::query()
-            ->with(['journalEntry', 'costCenter', 'projectFund'])
+            ->with([
+                'journalEntry',
+                'costCenter',
+                'projectFund',
+            ])
             ->where('account_id', $accountId)
-            ->whereHas('journalEntry', function ($query) use ($fromDate, $toDate) {
-                $query->where('status', 'posted')
-                    ->when($fromDate, fn ($q) => $q->whereDate('transaction_date', '>=', $fromDate))
-                    ->whereDate('transaction_date', '<=', $toDate);
-            })
-            ->join('accounting_journal_entries', 'accounting_journal_entries.id', '=', 'accounting_journal_entry_lines.journal_entry_id')
-            ->orderBy('accounting_journal_entries.transaction_date')
-            ->orderBy('accounting_journal_entry_lines.id')
-            ->select('accounting_journal_entry_lines.*')
+            ->whereHas(
+                'journalEntry',
+                function ($query) use (
+                    $fromDate,
+                    $toDate
+                ): void {
+                    $query
+                        ->where('status', 'posted')
+                        ->when(
+                            $fromDate,
+                            fn ($query) =>
+                                $query->whereDate(
+                                    'transaction_date',
+                                    '>=',
+                                    $fromDate
+                                )
+                        )
+                        ->whereDate(
+                            'transaction_date',
+                            '<=',
+                            $toDate
+                        );
+                }
+            )
+            ->join(
+                'accounting_journal_entries',
+                'accounting_journal_entries.id',
+                '=',
+                'accounting_journal_entry_lines.journal_entry_id'
+            )
+            ->orderBy(
+                'accounting_journal_entries.transaction_date'
+            )
+            ->orderBy(
+                'accounting_journal_entry_lines.id'
+            )
+            ->select(
+                'accounting_journal_entry_lines.*'
+            )
             ->get()
-            ->map(function (AccountingJournalEntryLine $line) use (&$runningBalance, $account) {
+            ->map(function (
+                AccountingJournalEntryLine $line
+            ) use (
+                &$runningBalance,
+                $account
+            ): array {
                 $delta = $account->normal_balance === 'debit'
-                    ? ((float) $line->debit - (float) $line->credit)
-                    : ((float) $line->credit - (float) $line->debit);
+                    ? (
+                        (float) $line->debit
+                        - (float) $line->credit
+                    )
+                    : (
+                        (float) $line->credit
+                        - (float) $line->debit
+                    );
 
-                $runningBalance = round($runningBalance + $delta, 2);
+                $runningBalance = round(
+                    $runningBalance + $delta,
+                    2
+                );
 
                 return [
-                    'date' => $line->journalEntry->transaction_date?->format('Y-m-d'),
-                    'journal_number' => $line->journalEntry->journal_number,
-                    'reference' => $line->journalEntry->reference,
-                    'description' => $line->description ?: $line->journalEntry->narration,
-                    'debit' => (float) $line->debit,
-                    'credit' => (float) $line->credit,
-                    'balance' => $runningBalance,
-                    'cost_center' => $line->costCenter?->name,
-                    'project' => $line->projectFund?->name,
+                    'date' =>
+                        $line->journalEntry
+                            ?->transaction_date
+                            ?->format('d M Y')
+                        ?: '-',
+
+                    'journal_number' =>
+                        $line->journalEntry
+                            ?->journal_number
+                        ?: '-',
+
+                    'reference' =>
+                        $line->journalEntry
+                            ?->reference,
+
+                    'description' =>
+                        $line->description
+                        ?: $line->journalEntry
+                            ?->narration,
+
+                    'debit' =>
+                        (float) $line->debit,
+
+                    'credit' =>
+                        (float) $line->credit,
+
+                    'balance' =>
+                        $runningBalance,
+
+                    'cost_center' =>
+                        $line->costCenter?->name,
+
+                    'project' =>
+                        $line->projectFund?->name,
                 ];
-            });
+            })
+            ->values();
     }
 
-    public function profitAndLoss(?string $from = null, ?string $to = null): array
-    {
-        $tb = $this->trialBalance($from, $to);
+    public function profitAndLoss(
+        ?string $from = null,
+        ?string $to = null
+    ): array {
+        $trialBalance = $this->trialBalance(
+            $from,
+            $to
+        );
 
-        $income = $tb->where('type', 'income')->sum('balance');
-        $costOfSales = $tb->where('type', 'cost_of_sales')->sum('balance');
-        $expenses = $tb->where('type', 'expense')->sum('balance');
+        $income = (float) $trialBalance
+            ->where('type', 'income')
+            ->sum('balance');
+
+        $costOfSales = (float) $trialBalance
+            ->where('type', 'cost_of_sales')
+            ->sum('balance');
+
+        $expenses = (float) $trialBalance
+            ->where('type', 'expense')
+            ->sum('balance');
 
         return [
             'income' => round($income, 2),
-            'cost_of_sales' => round($costOfSales, 2),
-            'gross_profit' => round($income - $costOfSales, 2),
+
+            'cost_of_sales' =>
+                round($costOfSales, 2),
+
+            'gross_profit' =>
+                round(
+                    $income - $costOfSales,
+                    2
+                ),
+
             'expenses' => round($expenses, 2),
-            'net_profit' => round($income - $costOfSales - $expenses, 2),
-            'lines' => $tb->whereIn('type', ['income', 'cost_of_sales', 'expense'])->values(),
+
+            'net_profit' =>
+                round(
+                    $income
+                    - $costOfSales
+                    - $expenses,
+                    2
+                ),
+
+            'lines' => $trialBalance
+                ->whereIn(
+                    'type',
+                    [
+                        'income',
+                        'cost_of_sales',
+                        'expense',
+                    ]
+                )
+                ->values(),
         ];
     }
 
-    public function balanceSheet(?string $asAt = null): array
-    {
-        $tb = $this->trialBalance(null, $asAt);
-        $assets = $tb->where('type', 'asset')->sum('balance');
-        $liabilities = $tb->where('type', 'liability')->sum('balance');
-        $equity = $tb->where('type', 'equity')->sum('balance');
-        $profit = $this->profitAndLoss(null, $asAt)['net_profit'];
+    public function balanceSheet(
+        ?string $asAt = null
+    ): array {
+        $trialBalance = $this->trialBalance(
+            null,
+            $asAt
+        );
+
+        $assets = (float) $trialBalance
+            ->where('type', 'asset')
+            ->sum('balance');
+
+        $liabilities = (float) $trialBalance
+            ->where('type', 'liability')
+            ->sum('balance');
+
+        $equity = (float) $trialBalance
+            ->where('type', 'equity')
+            ->sum('balance');
+
+        $profit = (float) $this->profitAndLoss(
+            null,
+            $asAt
+        )['net_profit'];
+
+        $liabilitiesAndEquity =
+            $liabilities + $equity + $profit;
 
         return [
             'assets' => round($assets, 2),
-            'liabilities' => round($liabilities, 2),
+
+            'liabilities' =>
+                round($liabilities, 2),
+
             'equity' => round($equity, 2),
-            'current_year_profit' => round($profit, 2),
-            'liabilities_and_equity' => round($liabilities + $equity + $profit, 2),
-            'difference' => round($assets - ($liabilities + $equity + $profit), 2),
-            'lines' => $tb->whereIn('type', ['asset', 'liability', 'equity'])->values(),
+
+            'current_year_profit' =>
+                round($profit, 2),
+
+            'liabilities_and_equity' =>
+                round(
+                    $liabilitiesAndEquity,
+                    2
+                ),
+
+            'difference' =>
+                round(
+                    $assets
+                    - $liabilitiesAndEquity,
+                    2
+                ),
+
+            'lines' => $trialBalance
+                ->whereIn(
+                    'type',
+                    [
+                        'asset',
+                        'liability',
+                        'equity',
+                    ]
+                )
+                ->values(),
         ];
+    }
+
+    public function cashFlow(
+        ?string $from = null,
+        ?string $to = null
+    ): array {
+        $fromDate = $from
+            ? Carbon::parse($from)->toDateString()
+            : now('Africa/Nairobi')
+                ->startOfYear()
+                ->toDateString();
+
+        $toDate = $to
+            ? Carbon::parse($to)->toDateString()
+            : now('Africa/Nairobi')->toDateString();
+
+        $cashAccountIds =
+            $this->cashEquivalentAccountIds();
+
+        if ($cashAccountIds->isEmpty()) {
+            return [
+                'inflows' => 0.0,
+                'outflows' => 0.0,
+                'net_cash_flow' => 0.0,
+                'movements' => 0,
+                'lines' => collect(),
+            ];
+        }
+
+        $lines = AccountingJournalEntryLine::query()
+            ->with([
+                'journalEntry',
+                'account',
+            ])
+            ->whereIn(
+                'account_id',
+                $cashAccountIds
+            )
+            ->whereHas(
+                'journalEntry',
+                function ($query) use (
+                    $fromDate,
+                    $toDate
+                ): void {
+                    $query
+                        ->where('status', 'posted')
+                        ->whereDate(
+                            'transaction_date',
+                            '>=',
+                            $fromDate
+                        )
+                        ->whereDate(
+                            'transaction_date',
+                            '<=',
+                            $toDate
+                        );
+                }
+            )
+            ->join(
+                'accounting_journal_entries',
+                'accounting_journal_entries.id',
+                '=',
+                'accounting_journal_entry_lines.journal_entry_id'
+            )
+            ->orderBy(
+                'accounting_journal_entries.transaction_date'
+            )
+            ->orderBy(
+                'accounting_journal_entry_lines.id'
+            )
+            ->select(
+                'accounting_journal_entry_lines.*'
+            )
+            ->get();
+
+        $inflows = round(
+            (float) $lines->sum('debit'),
+            2
+        );
+
+        $outflows = round(
+            (float) $lines->sum('credit'),
+            2
+        );
+
+        return [
+            'inflows' => $inflows,
+            'outflows' => $outflows,
+
+            'net_cash_flow' =>
+                round(
+                    $inflows - $outflows,
+                    2
+                ),
+
+            'movements' => $lines->count(),
+            'lines' => $lines,
+        ];
+    }
+
+    private function cashEquivalentAccountIds(): Collection
+    {
+        $ids = collect();
+
+        if (
+            Schema::hasTable(
+                'accounting_account_mappings'
+            )
+        ) {
+            $ids = AccountingAccountMapping::query()
+                ->whereIn(
+                    'key',
+                    [
+                        'cash_account',
+                        'bank_account',
+                        'mpesa_account',
+                        'petty_cash_account',
+                    ]
+                )
+                ->whereNotNull('account_id')
+                ->pluck('account_id');
+        }
+
+        if ($ids->isNotEmpty()) {
+            return $ids
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->values();
+        }
+
+        return AccountingAccount::query()
+            ->active()
+            ->where('type', 'asset')
+            ->where(function ($query): void {
+                $query
+                    ->whereRaw(
+                        'LOWER(name) LIKE ?',
+                        ['%cash%']
+                    )
+                    ->orWhereRaw(
+                        'LOWER(name) LIKE ?',
+                        ['%bank%']
+                    )
+                    ->orWhereRaw(
+                        'LOWER(name) LIKE ?',
+                        ['%m-pesa%']
+                    )
+                    ->orWhereRaw(
+                        'LOWER(name) LIKE ?',
+                        ['%mpesa%']
+                    )
+                    ->orWhereRaw(
+                        'LOWER(name) LIKE ?',
+                        ['%paybill%']
+                    )
+                    ->orWhereRaw(
+                        'LOWER(name) LIKE ?',
+                        ['%till%']
+                    )
+                    ->orWhereRaw(
+                        'LOWER(name) LIKE ?',
+                        ['%mobile money%']
+                    );
+            })
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
     }
 }

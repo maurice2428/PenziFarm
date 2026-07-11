@@ -10,6 +10,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 
 class StockMovementResource extends Resource
 {
@@ -185,6 +186,12 @@ class StockMovementResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                Tables\Filters\SelectFilter::make('inventory_item_id')
+                    ->label('Stock Item')
+                    ->relationship('inventoryItem', 'name')
+                    ->searchable()
+                    ->preload(),
+
                 Tables\Filters\SelectFilter::make('direction')
                     ->label('Direction')
                     ->options([
@@ -197,6 +204,7 @@ class StockMovementResource extends Resource
                     ->label('Movement Type')
                     ->options([
                         'purchase_receipt' => 'Purchase Receipt',
+                        'purchase_receipt_repair' => 'Purchase Receipt Repair',
                         'animal_feeding' => 'Animal Feeding',
                         'vet_treatment' => 'Vet Treatment',
                         'crop_input' => 'Crop Input',
@@ -229,7 +237,106 @@ class StockMovementResource extends Resource
                     }),
             ])
             ->actions([])
-            ->bulkActions([])
+            ->bulkActions([
+                Tables\Actions\BulkAction::make(
+                    'exportSelected'
+                )
+                    ->label('Export Selected')
+                    ->icon(
+                        'heroicon-o-arrow-down-tray'
+                    )
+                    ->color('gray')
+                    ->action(
+                        function (
+                            Collection $records
+                        ) {
+                            return response()
+                                ->streamDownload(
+                                    function () use (
+                                        $records
+                                    ): void {
+                                        $handle = fopen(
+                                            'php://output',
+                                            'wb'
+                                        );
+
+                                        fputcsv($handle, [
+                                            'Movement No.',
+                                            'Date',
+                                            'Stock Item',
+                                            'Direction',
+                                            'Type',
+                                            'Source',
+                                            'Quantity',
+                                            'Unit',
+                                            'Unit Cost',
+                                            'Total Cost',
+                                            'Reference',
+                                            'Batch',
+                                            'Expiry',
+                                            'Created By',
+                                            'Notes',
+                                        ]);
+
+                                        foreach ($records as $record) {
+                                            fputcsv($handle, [
+                                                $record
+                                                    ->movement_no_display,
+                                                $record
+                                                    ->movement_date
+                                                    ?->format(
+                                                        'Y-m-d'
+                                                    ),
+                                                $record
+                                                    ->item_name_display,
+                                                $record
+                                                    ->direction_label,
+                                                $record
+                                                    ->type_label,
+                                                $record
+                                                    ->source_label,
+                                                (float) $record
+                                                    ->quantity,
+                                                $record->unit,
+                                                (float) $record
+                                                    ->unit_cost,
+                                                (float) $record
+                                                    ->total_cost,
+                                                $record
+                                                    ->reference_label,
+                                                $record
+                                                    ->batch_display,
+                                                $record
+                                                    ->expiry_date
+                                                    ?->format(
+                                                        'Y-m-d'
+                                                    ),
+                                                $record
+                                                    ->createdBy
+                                                    ?->name,
+                                                $record
+                                                    ->notes_display,
+                                            ]);
+                                        }
+
+                                        fclose($handle);
+                                    },
+                                    'stock-movements-selected-'
+                                    . now(
+                                        'Africa/Nairobi'
+                                    )->format(
+                                        'Ymd_His'
+                                    )
+                                    . '.csv',
+                                    [
+                                        'Content-Type' =>
+                                            'text/csv',
+                                    ]
+                                );
+                        }
+                    )
+                    ->deselectRecordsAfterCompletion(),
+            ])
             ->emptyStateIcon('heroicon-o-arrows-right-left')
             ->emptyStateHeading('No stock movements yet')
             ->emptyStateDescription('Stock movements will appear automatically from procurement receiving, animal feeding, vet treatment, crop input use, and adjustments.');

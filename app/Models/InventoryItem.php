@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class InventoryItem extends Model
@@ -127,5 +128,42 @@ class InventoryItem extends Model
         }
 
         return 'Stock Okay';
+    }
+
+    public function hasOperationalHistory(): bool
+    {
+        return $this->relationHasHistory($this->movements())
+            || $this->relationHasHistory(
+                $this->purchaseOrderItems()
+            )
+            || $this->relationHasHistory(
+                $this->feedingItems()
+            )
+            || $this->relationHasHistory(
+                $this->healthProducts()
+            );
+    }
+
+    public function canBeDeletedSafely(): bool
+    {
+        return ! $this->hasOperationalHistory();
+    }
+
+    private function relationHasHistory(
+        Relation $relation
+    ): bool {
+        $related = $relation->getRelated();
+
+        if (
+            in_array(
+                SoftDeletes::class,
+                class_uses_recursive($related),
+                true
+            )
+        ) {
+            $relation->withTrashed();
+        }
+
+        return $relation->exists();
     }
 }

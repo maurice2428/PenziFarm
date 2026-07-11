@@ -7,22 +7,27 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AccountingJournalEntry extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     protected $table = 'accounting_journal_entries';
-
     protected $guarded = [];
 
     protected $casts = [
         'transaction_date' => 'date',
         'posted_at' => 'datetime',
+        'approved_at' => 'datetime',
         'reversed_at' => 'datetime',
         'total_debit' => 'decimal:2',
         'total_credit' => 'decimal:2',
+        'exchange_rate' => 'decimal:6',
         'metadata' => 'array',
+        'lock_version' => 'integer',
     ];
 
     public function fiscalYear(): BelongsTo
@@ -45,6 +50,11 @@ class AccountingJournalEntry extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
     public function postedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'posted_by');
@@ -57,7 +67,27 @@ class AccountingJournalEntry extends Model
 
     public function reversalOf(): BelongsTo
     {
-        return $this->belongsTo(self::class, 'reversal_of_id');
+        return $this->belongsTo(self::class, 'reversal_of_id')->withTrashed();
+    }
+
+    public function reversal(): HasOne
+    {
+        return $this->hasOne(self::class, 'reversal_of_id')->withTrashed();
+    }
+
+    public function sourcePosting(): HasOne
+    {
+        return $this->hasOne(AccountingSourcePosting::class, 'journal_entry_id');
+    }
+
+    public function taxTransactions(): HasMany
+    {
+        return $this->hasMany(AccountingTaxTransaction::class, 'journal_entry_id');
+    }
+
+    public function isDraft(): bool
+    {
+        return $this->status === 'draft';
     }
 
     public function isPosted(): bool
@@ -65,8 +95,18 @@ class AccountingJournalEntry extends Model
         return $this->status === 'posted';
     }
 
+    public function isApproved(): bool
+    {
+        return filled($this->approved_at);
+    }
+
     public function isBalanced(): bool
     {
         return abs((float) $this->total_debit - (float) $this->total_credit) < 0.01;
+    }
+
+    public function canBeDeletedSafely(): bool
+    {
+        return $this->isDraft() && ! $this->sourcePosting()->exists();
     }
 }

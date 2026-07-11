@@ -114,7 +114,23 @@ class PurchaseOrderItem extends Model
 
     public function receiptItems()
     {
-        return $this->hasMany(PurchaseOrderReceiptItem::class);
+        return $this->hasMany(
+            PurchaseOrderReceiptItem::class
+        )->whereHas(
+            'receipt',
+            fn ($query) => $query
+                ->whereNotIn(
+                    'status',
+                    ['reversed', 'cancelled']
+                )
+        );
+    }
+
+    public function allReceiptItems()
+    {
+        return $this->hasMany(
+            PurchaseOrderReceiptItem::class
+        );
     }
 
     public function getAcceptedQuantityAttribute(): float
@@ -131,9 +147,28 @@ class PurchaseOrderItem extends Model
             ->sum('rejected_quantity');
     }
 
+    public function getClosedRejectedQuantityAttribute(): float
+    {
+        return (float) $this->receiptItems()
+            ->whereIn(
+                'rejection_disposition',
+                [
+                    'supplier_credit_note',
+                    'supplier_refund',
+                    'accepted_short_delivery',
+                ]
+            )
+            ->sum('rejected_quantity');
+    }
+
     public function getRemainingQuantityAttribute(): float
     {
-        return max(0, (float) $this->quantity_ordered - (float) $this->accepted_quantity);
+        return max(
+            0,
+            (float) $this->quantity_ordered
+                - (float) $this->accepted_quantity
+                - (float) $this->closed_rejected_quantity
+        );
     }
 
     public function getReceivingStatusLabelAttribute(): string

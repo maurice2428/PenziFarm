@@ -57,6 +57,10 @@ class Employee extends Model
         'nssf_enabled',
         'sha_enabled',
         'housing_levy_enabled',
+        'registered_pension_contribution',
+        'post_retirement_medical_contribution',
+        'mortgage_interest',
+        'insurance_relief',
         'is_active',
         'exit_date',
         'exit_reason',
@@ -80,6 +84,10 @@ class Employee extends Model
         'nssf_enabled' => 'boolean',
         'sha_enabled' => 'boolean',
         'housing_levy_enabled' => 'boolean',
+        'registered_pension_contribution' => 'decimal:2',
+        'post_retirement_medical_contribution' => 'decimal:2',
+        'mortgage_interest' => 'decimal:2',
+        'insurance_relief' => 'decimal:2',
         'is_active' => 'boolean',
     ];
 
@@ -99,12 +107,17 @@ class Employee extends Model
     {
         static::creating(function (self $employee): void {
             if (blank($employee->employee_number)) {
-                $prefix = 'LLKSTF';
+                $prefix = self::employeeNumberPrefix();
 
                 $lastNumber = self::withTrashed()
-                    ->where('employee_number', 'like', $prefix . '%')
+                    ->where(
+                        'employee_number',
+                        'like',
+                        $prefix . '%'
+                    )
                     ->selectRaw(
-                        'MAX(CAST(SUBSTRING(employee_number, ?) AS UNSIGNED)) as max_number',
+                        'MAX(CAST(SUBSTRING(employee_number, ?) '
+                        . 'AS UNSIGNED)) as max_number',
                         [strlen($prefix) + 1]
                     )
                     ->value('max_number');
@@ -112,15 +125,27 @@ class Employee extends Model
                 $nextNumber = ((int) $lastNumber) + 1;
 
                 do {
-                    $employeeNumber = $prefix . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+                    $employeeNumber =
+                        $prefix
+                        . str_pad(
+                            (string) $nextNumber,
+                            4,
+                            '0',
+                            STR_PAD_LEFT
+                        );
+
                     $nextNumber++;
                 } while (
                     self::withTrashed()
-                        ->where('employee_number', $employeeNumber)
+                        ->where(
+                            'employee_number',
+                            $employeeNumber
+                        )
                         ->exists()
                 );
 
-                $employee->employee_number = $employeeNumber;
+                $employee->employee_number =
+                    $employeeNumber;
             }
         });
 
@@ -131,6 +156,68 @@ class Employee extends Model
                 $employee->last_name,
             ])));
         });
+    }
+
+    public static function employeeNumberPrefix(): string
+    {
+        $configured = function_exists('setting')
+            ? trim(
+                (string) setting(
+                    'hr.employee_number_prefix',
+                    ''
+                )
+            )
+            : '';
+
+        if ($configured !== '') {
+            $clean = strtoupper(
+                preg_replace(
+                    '/[^A-Z0-9]/i',
+                    '',
+                    $configured
+                )
+            );
+
+            return $clean !== ''
+                ? $clean
+                : 'STF';
+        }
+
+        $organizationName = function_exists('setting')
+            ? (
+                setting('farm.name')
+                ?: setting('company.name')
+                ?: config('app.name', 'Farm')
+            )
+            : config('app.name', 'Farm');
+
+        $words = preg_split(
+            '/\s+/',
+            trim(
+                preg_replace(
+                    '/[^A-Z0-9]+/i',
+                    ' ',
+                    (string) $organizationName
+                )
+            )
+        ) ?: [];
+
+        $initials = collect($words)
+            ->filter()
+            ->take(4)
+            ->map(
+                fn (string $word): string =>
+                    strtoupper(
+                        mb_substr($word, 0, 1)
+                    )
+            )
+            ->implode('');
+
+        if ($initials === '') {
+            $initials = 'ORG';
+        }
+
+        return $initials . 'STF';
     }
 
     public function getActivitylogOptions(): LogOptions

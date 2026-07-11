@@ -1,0 +1,328 @@
+<div
+    class="animal-weight-stat-shell"
+    style="
+        --aws-primary: {{ $primaryColor }};
+        --aws-secondary: {{ $secondaryColor }};
+        --aws-accent: {{ $accentColor }};
+        --aws-success: {{ $successColor }};
+        --aws-danger: {{ $dangerColor }};
+    "
+>
+    <style>
+        .animal-weight-stat-shell {
+            width: 100%;
+        }
+
+        .animal-weight-stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .62rem;
+            width: 100%;
+        }
+
+        .animal-weight-stat-card {
+            position: relative;
+            isolation: isolate;
+            min-width: 0;
+            min-height: 132px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, .22);
+            border-radius: .95rem;
+            padding: .88rem;
+            color: #ffffff;
+            box-shadow:
+                0 12px 28px rgba(15, 23, 42, .12),
+                inset 0 1px 0 rgba(255, 255, 255, .12);
+            transition:
+                transform .18s ease,
+                box-shadow .18s ease;
+        }
+
+        .animal-weight-stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow:
+                0 18px 34px rgba(15, 23, 42, .18),
+                inset 0 1px 0 rgba(255, 255, 255, .16);
+        }
+
+        .animal-weight-stat-card::before {
+            content: "";
+            position: absolute;
+            z-index: -1;
+            top: -42px;
+            right: -34px;
+            width: 115px;
+            height: 115px;
+            border: 1px solid rgba(255, 255, 255, .16);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .08);
+        }
+
+        .animal-weight-stat-card::after {
+            content: "";
+            position: absolute;
+            z-index: -1;
+            right: 16px;
+            bottom: -46px;
+            width: 92px;
+            height: 92px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .07);
+            filter: blur(2px);
+        }
+
+        .animal-weight-stat-card[data-tone="primary"] {
+            background:
+                linear-gradient(
+                    135deg,
+                    var(--aws-primary) 0%,
+                    var(--aws-secondary) 100%
+                );
+        }
+
+        .animal-weight-stat-card[data-tone="average"] {
+            background:
+                linear-gradient(
+                    135deg,
+                    var(--aws-secondary) 0%,
+                    color-mix(
+                        in srgb,
+                        var(--aws-primary) 72%,
+                        #0f172a
+                    ) 100%
+                );
+        }
+
+        .animal-weight-stat-card[data-tone="success"] {
+            background:
+                linear-gradient(
+                    135deg,
+                    var(--aws-success) 0%,
+                    color-mix(
+                        in srgb,
+                        var(--aws-primary) 62%,
+                        var(--aws-success)
+                    ) 100%
+                );
+        }
+
+        .animal-weight-stat-card[data-tone="danger"] {
+            background:
+                linear-gradient(
+                    135deg,
+                    var(--aws-danger) 0%,
+                    color-mix(
+                        in srgb,
+                        var(--aws-danger) 62%,
+                        var(--aws-accent)
+                    ) 100%
+                );
+        }
+
+        .animal-weight-stat-card[data-tone="warning"] {
+            background:
+                linear-gradient(
+                    135deg,
+                    var(--aws-accent) 0%,
+                    color-mix(
+                        in srgb,
+                        var(--aws-accent) 62%,
+                        var(--aws-secondary)
+                    ) 100%
+                );
+        }
+
+        .animal-weight-stat-card[data-tone="recent"] {
+            background:
+                linear-gradient(
+                    135deg,
+                    color-mix(
+                        in srgb,
+                        var(--aws-primary) 78%,
+                        #2563eb
+                    ) 0%,
+                    color-mix(
+                        in srgb,
+                        var(--aws-accent) 64%,
+                        var(--aws-secondary)
+                    ) 100%
+                );
+        }
+
+        .animal-weight-stat-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: .55rem;
+        }
+
+        .animal-weight-stat-label {
+            min-width: 0;
+            color: rgba(255, 255, 255, .82);
+            font-size: .59rem;
+            font-weight: 950;
+            letter-spacing: .075em;
+            line-height: 1.2;
+            text-transform: uppercase;
+        }
+
+        .animal-weight-stat-icon {
+            display: grid;
+            flex: 0 0 auto;
+            width: 2rem;
+            height: 2rem;
+            place-items: center;
+            border: 1px solid rgba(255, 255, 255, .22);
+            border-radius: .7rem;
+            background: rgba(255, 255, 255, .13);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12);
+        }
+
+        .animal-weight-stat-icon svg {
+            width: 1rem;
+            height: 1rem;
+        }
+
+        .animal-weight-stat-value {
+            margin-top: .58rem;
+            overflow: hidden;
+            color: #ffffff;
+            font-size: clamp(1.1rem, 3.7vw, 1.65rem);
+            font-weight: 950;
+            letter-spacing: -.035em;
+            line-height: 1;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .animal-weight-stat-description {
+            min-height: 2.15em;
+            margin-top: .42rem;
+            color: rgba(255, 255, 255, .8);
+            font-size: .61rem;
+            font-weight: 650;
+            line-height: 1.35;
+        }
+
+        .animal-weight-stat-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .4rem;
+            margin-top: .62rem;
+            padding-top: .5rem;
+            border-top: 1px solid rgba(255, 255, 255, .15);
+        }
+
+        .animal-weight-stat-meta {
+            overflow: hidden;
+            color: rgba(255, 255, 255, .9);
+            font-size: .56rem;
+            font-weight: 850;
+            line-height: 1.2;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .animal-weight-stat-dot {
+            width: .42rem;
+            height: .42rem;
+            flex: 0 0 auto;
+            border: 2px solid rgba(255, 255, 255, .4);
+            border-radius: 999px;
+            background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, .1);
+        }
+
+        .dark .animal-weight-stat-card {
+            border-color: rgba(255, 255, 255, .16);
+            box-shadow:
+                0 14px 32px rgba(0, 0, 0, .3),
+                inset 0 1px 0 rgba(255, 255, 255, .08);
+        }
+
+        @media (min-width: 720px) {
+            .animal-weight-stat-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: .72rem;
+            }
+
+            .animal-weight-stat-card {
+                min-height: 142px;
+                padding: .95rem;
+            }
+        }
+
+        @media (min-width: 1280px) {
+            .animal-weight-stat-grid {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 380px) {
+            .animal-weight-stat-grid {
+                gap: .48rem;
+            }
+
+            .animal-weight-stat-card {
+                min-height: 125px;
+                padding: .72rem;
+                border-radius: .82rem;
+            }
+
+            .animal-weight-stat-icon {
+                width: 1.75rem;
+                height: 1.75rem;
+            }
+
+            .animal-weight-stat-description {
+                font-size: .56rem;
+            }
+
+            .animal-weight-stat-meta {
+                font-size: .51rem;
+            }
+        }
+    </style>
+
+    <div class="animal-weight-stat-grid">
+        @foreach ($cards as $card)
+            <article
+                class="animal-weight-stat-card"
+                data-tone="{{ $card['tone'] }}"
+            >
+                <div class="animal-weight-stat-top">
+                    <div class="animal-weight-stat-label">
+                        {{ $card['label'] }}
+                    </div>
+
+                    <div class="animal-weight-stat-icon">
+                        <x-filament::icon
+                            :icon="$card['icon']"
+                            class="h-4 w-4"
+                        />
+                    </div>
+                </div>
+
+                <div class="animal-weight-stat-value">
+                    {{ $card['value'] }}
+                </div>
+
+                <div class="animal-weight-stat-description">
+                    {{ $card['description'] }}
+                </div>
+
+                <div class="animal-weight-stat-footer">
+                    <div
+                        class="animal-weight-stat-meta"
+                        title="{{ $card['meta'] }}"
+                    >
+                        {{ $card['meta'] }}
+                    </div>
+
+                    <span class="animal-weight-stat-dot"></span>
+                </div>
+            </article>
+        @endforeach
+    </div>
+</div>

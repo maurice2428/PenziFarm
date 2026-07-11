@@ -1,6 +1,6 @@
 @php
-    if (!function_exists('pdfImageBase64')) {
-        function pdfImageBase64(?string $path): ?string
+    if (!function_exists('payslipsBulkPdfImageBase64')) {
+        function payslipsBulkPdfImageBase64(?string $path): ?string
         {
             if (!$path) {
                 return null;
@@ -51,7 +51,36 @@
     $dangerColor = setting('theme.danger', '#dc2626');
     $successColor = setting('theme.success', '#16a34a');
 
-    $logoBase64 = pdfImageBase64(setting('branding.logo_light'));
+    $logoBase64 = payslipsBulkPdfImageBase64(
+        setting('branding.logo_light')
+    );
+
+    $paymentSettings =
+        \App\Models\Settings\PaymentSetting::current();
+
+    $signatureBase64 = payslipsBulkPdfImageBase64(
+        data_get(
+            $paymentSettings,
+            'authorized_signature_image'
+        )
+        ?: data_get(
+            $paymentSettings,
+            'invoice_signature_path'
+        )
+        ?: setting('branding.signature')
+    );
+
+    $stampBase64 = payslipsBulkPdfImageBase64(
+        data_get(
+            $paymentSettings,
+            'payment_stamp_image'
+        )
+        ?: data_get(
+            $paymentSettings,
+            'invoice_stamp_path'
+        )
+        ?: setting('branding.stamp')
+    );
 
     $totalGross = $payslips->sum(fn($p) => (float) $p->gross_pay);
     $totalNet = $payslips->sum(fn($p) => (float) $p->net_pay);
@@ -259,6 +288,28 @@
         .no {
             background: #9ca3af;
         }
+
+        .approval-table {
+            width: 100%;
+            margin-top: 18px;
+            page-break-inside: avoid;
+        }
+
+        .approval-table td {
+            width: 50%;
+            text-align: center;
+            vertical-align: bottom;
+        }
+
+        .approval-signature {
+            max-width: 145px;
+            max-height: 65px;
+        }
+
+        .approval-stamp {
+            max-width: 120px;
+            max-height: 80px;
+        }
     </style>
 </head>
 
@@ -393,6 +444,34 @@
                 @endforeach
             </tbody>
         </table>
+
+        <table class="approval-table">
+            <tr>
+                <td>
+                    @if ($signatureBase64)
+                        <img
+                            src="{{ $signatureBase64 }}"
+                            class="approval-signature"
+                            alt="Authorised Signature"
+                        >
+                    @endif
+                    <br>
+                    <strong>Authorised Signature</strong>
+                </td>
+                <td>
+                    @if ($stampBase64)
+                        <img
+                            src="{{ $stampBase64 }}"
+                            class="approval-stamp"
+                            alt="Official Stamp"
+                        >
+                    @endif
+                    <br>
+                    <strong>Official Stamp</strong>
+                </td>
+            </tr>
+        </table>
+
     </main>
 
     <script type="text/php">

@@ -1,25 +1,962 @@
 <x-filament-panels::page>
-    <div class="space-y-6">
-        <form wire:submit.prevent>
-            {{ $this->form }}
-        </form>
+    @php
+        $filterKey = md5(json_encode($this->filters));
+        $widgets = $this->getWidgets();
 
-        @php
-            $filterKey = md5(json_encode($this->filters));
-            $widgets = $this->getWidgets();
-        @endphp
+        $farmName = setting('farm.name', 'Penzi Farm Limited');
+        $farmTagline = setting(
+            'farm.tagline',
+            'Nurturing Quality, Inspiring Global Standards'
+        );
 
-        <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            @foreach ($widgets as $widget)
-                <div
-                    wire:key="sales-widget-{{ str($widget)->afterLast('\\')->kebab() }}-{{ $filterKey }}"
-                    @class([
-                        'xl:col-span-2' => str_contains($widget, 'Stats') || str_contains($widget, 'Table'),
-                    ])
-                >
-                    @livewire($widget, ['filters' => $this->filters], key($widget . '-' . $filterKey))
+        $primaryColor = trim(setting('theme.primary', '#14532d'));
+        $secondaryColor = trim(setting('theme.secondary', '#166534'));
+        $accentColor = trim(setting('theme.accent', '#b7791f'));
+        $successColor = trim(setting('theme.success', '#16a34a'));
+        $dangerColor = trim(setting('theme.danger', '#dc2626'));
+
+        $dateFrom = filled($this->filters['date_from'] ?? null)
+            ? \Carbon\Carbon::parse($this->filters['date_from'])->format('d M Y')
+            : 'Beginning';
+
+        $dateTo = filled($this->filters['date_to'] ?? null)
+            ? \Carbon\Carbon::parse($this->filters['date_to'])->format('d M Y')
+            : 'Today';
+
+        $activeFilterCount = collect([
+            $this->filters['payment_status'] ?? null,
+            $this->filters['invoice_status'] ?? null,
+            $this->filters['payment_method'] ?? null,
+        ])->filter(fn ($value) => filled($value))->count();
+
+        $formatFilter = static fn (?string $value): string =>
+            filled($value)
+                ? str($value)->replace('_', ' ')->title()->toString()
+                : 'All';
+
+        $paymentStatusLabel = $formatFilter(
+            $this->filters['payment_status'] ?? null
+        );
+
+        $invoiceStatusLabel = $formatFilter(
+            $this->filters['invoice_status'] ?? null
+        );
+
+        $paymentMethodLabel = $formatFilter(
+            $this->filters['payment_method'] ?? null
+        );
+    @endphp
+
+    <style>
+        .sales-dashboard-classic {
+            --sales-primary: {{ $primaryColor }};
+            --sales-secondary: {{ $secondaryColor }};
+            --sales-accent: {{ $accentColor }};
+            --sales-success: {{ $successColor }};
+            --sales-danger: {{ $dangerColor }};
+
+            --sales-heading: #0f172a;
+            --sales-text: #334155;
+            --sales-muted: #64748b;
+            --sales-border: #dbe4df;
+            --sales-surface: #ffffff;
+            --sales-soft: #f8fafc;
+            --sales-soft-strong: #f1f5f9;
+
+            display: grid;
+            gap: 1rem;
+            width: 100%;
+        }
+
+        .dark .sales-dashboard-classic {
+            --sales-heading: #f8fafc;
+            --sales-text: #e2e8f0;
+            --sales-muted: #94a3b8;
+            --sales-border: #334155;
+            --sales-surface: #0f172a;
+            --sales-soft: #111827;
+            --sales-soft-strong: #1e293b;
+        }
+
+        .sales-dashboard-hero {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid color-mix(
+                in srgb,
+                var(--sales-primary) 35%,
+                var(--sales-border)
+            );
+            border-radius: 1.05rem;
+            padding: 1.15rem 1.2rem;
+            color: #ffffff;
+            background:
+                radial-gradient(
+                    circle at 92% 5%,
+                    rgba(255,255,255,.18),
+                    transparent 25%
+                ),
+                radial-gradient(
+                    circle at 8% 92%,
+                    color-mix(
+                        in srgb,
+                        var(--sales-accent) 34%,
+                        transparent
+                    ),
+                    transparent 34%
+                ),
+                linear-gradient(
+                    125deg,
+                    var(--sales-primary),
+                    var(--sales-secondary)
+                );
+            box-shadow: 0 14px 34px color-mix(
+                in srgb,
+                var(--sales-primary) 18%,
+                transparent
+            );
+        }
+
+        .sales-dashboard-hero::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(
+                    rgba(255,255,255,.045) 1px,
+                    transparent 1px
+                ),
+                linear-gradient(
+                    90deg,
+                    rgba(255,255,255,.045) 1px,
+                    transparent 1px
+                );
+            background-size: 26px 26px;
+            mask-image: linear-gradient(to bottom, black, transparent);
+        }
+
+        .sales-dashboard-hero-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .sales-dashboard-eyebrow {
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            color: rgba(255,255,255,.78);
+            font-size: .66rem;
+            font-weight: 900;
+            letter-spacing: .11em;
+            text-transform: uppercase;
+        }
+
+        .sales-dashboard-eyebrow svg {
+            width: .95rem;
+            height: .95rem;
+        }
+
+        .sales-dashboard-title {
+            margin-top: .35rem;
+            color: #ffffff;
+            font-size: clamp(1.25rem, 2.3vw, 1.95rem);
+            font-weight: 950;
+            letter-spacing: -.035em;
+        }
+
+        .sales-dashboard-subtitle {
+            max-width: 720px;
+            margin-top: .42rem;
+            color: rgba(255,255,255,.8);
+            font-size: .78rem;
+            line-height: 1.55;
+        }
+
+        .sales-dashboard-hero-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .42rem;
+            margin-top: .8rem;
+        }
+
+        .sales-dashboard-hero-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: .3rem;
+            padding: .38rem .56rem;
+            border: 1px solid rgba(255,255,255,.2);
+            border-radius: 999px;
+            background: rgba(255,255,255,.11);
+            color: rgba(255,255,255,.92);
+            font-size: .62rem;
+            font-weight: 850;
+            backdrop-filter: blur(8px);
+        }
+
+        .sales-dashboard-hero-pill svg {
+            width: .78rem;
+            height: .78rem;
+        }
+
+        .sales-dashboard-period-card {
+            min-width: 220px;
+            padding: .85rem .9rem;
+            border: 1px solid rgba(255,255,255,.2);
+            border-radius: .9rem;
+            background: rgba(255,255,255,.11);
+            backdrop-filter: blur(10px);
+        }
+
+        .sales-dashboard-period-label {
+            color: rgba(255,255,255,.72);
+            font-size: .6rem;
+            font-weight: 900;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .sales-dashboard-period-value {
+            margin-top: .27rem;
+            color: #ffffff;
+            font-size: .93rem;
+            font-weight: 950;
+        }
+
+        .sales-dashboard-period-note {
+            margin-top: .2rem;
+            color: rgba(255,255,255,.72);
+            font-size: .61rem;
+            line-height: 1.35;
+        }
+
+        .sales-dashboard-filter-shell {
+            overflow: hidden;
+            border: 1px solid var(--sales-border);
+            border-radius: 1rem;
+            background: var(--sales-surface);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, .045);
+        }
+
+        .dark .sales-dashboard-filter-shell {
+            box-shadow: 0 10px 28px rgba(0,0,0,.22);
+        }
+
+        .sales-dashboard-filter-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .75rem;
+            padding: .78rem .95rem;
+            border-bottom: 1px solid var(--sales-border);
+            background: var(--sales-soft);
+            flex-wrap: wrap;
+        }
+
+        .sales-dashboard-filter-title {
+            display: flex;
+            align-items: center;
+            gap: .42rem;
+            color: var(--sales-heading);
+            font-size: .75rem;
+            font-weight: 900;
+        }
+
+        .sales-dashboard-filter-title svg {
+            width: .9rem;
+            height: .9rem;
+            color: var(--sales-primary);
+        }
+
+        .sales-dashboard-filter-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .34rem;
+        }
+
+        .sales-dashboard-filter-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: .25rem;
+            padding: .28rem .45rem;
+            border: 1px solid var(--sales-border);
+            border-radius: 999px;
+            color: var(--sales-muted);
+            background: var(--sales-surface);
+            font-size: .57rem;
+            font-weight: 800;
+        }
+
+        .sales-dashboard-filter-chip strong {
+            color: var(--sales-heading);
+        }
+
+        .sales-dashboard-filter-form {
+            padding: .9rem .95rem .95rem;
+        }
+
+        .sales-dashboard-widgets {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: .9rem;
+            width: 100%;
+        }
+
+        .sales-dashboard-widget {
+            min-width: 0;
+            overflow: hidden;
+            border: 1px solid var(--sales-border);
+            border-radius: 1rem;
+            background: var(--sales-surface);
+            box-shadow: 0 8px 22px rgba(15, 23, 42, .045);
+            transition:
+                transform .16s ease,
+                box-shadow .16s ease,
+                border-color .16s ease;
+        }
+
+        .sales-dashboard-widget:hover {
+            transform: translateY(-1px);
+            border-color: color-mix(
+                in srgb,
+                var(--sales-primary) 28%,
+                var(--sales-border)
+            );
+            box-shadow: 0 12px 28px rgba(15, 23, 42, .075);
+        }
+
+        .dark .sales-dashboard-widget {
+            box-shadow: 0 8px 24px rgba(0,0,0,.2);
+        }
+
+        .sales-dashboard-widget-inner {
+            min-width: 0;
+            padding: .2rem;
+        }
+
+        .sales-dashboard-widget-full {
+            grid-column: 1 / -1;
+        }
+
+        .sales-dashboard-empty {
+            display: grid;
+            min-height: 240px;
+            place-items: center;
+            border: 1px dashed var(--sales-border);
+            border-radius: 1rem;
+            color: var(--sales-muted);
+            background: var(--sales-soft);
+            text-align: center;
+        }
+
+        .sales-dashboard-empty-icon {
+            display: grid;
+            width: 3rem;
+            height: 3rem;
+            margin: 0 auto .65rem;
+            place-items: center;
+            border: 1px solid var(--sales-border);
+            border-radius: 999px;
+            color: var(--sales-primary);
+            background: var(--sales-surface);
+        }
+
+        .sales-dashboard-empty-icon svg {
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+
+        .sales-dashboard-empty-title {
+            color: var(--sales-heading);
+            font-size: .86rem;
+            font-weight: 900;
+        }
+
+        .sales-dashboard-empty-text {
+            max-width: 420px;
+            margin-top: .3rem;
+            font-size: .68rem;
+            line-height: 1.45;
+        }
+
+        /*
+         * Executive KPI cards.
+         * These selectors enhance Filament's StatsOverviewWidget only inside
+         * this sales dashboard.
+         */
+        .sales-dashboard-widget-stats {
+            grid-column: 1 / -1;
+            overflow: visible;
+            border: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .sales-dashboard-widget-stats:hover {
+            transform: none;
+            border-color: transparent;
+            box-shadow: none;
+        }
+
+        .sales-dashboard-widget-stats .sales-dashboard-widget-inner {
+            padding: 0;
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stats-ctn {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            align-items: stretch !important;
+            gap: .78rem !important;
+            width: 100% !important;
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat {
+            --sales-stat-color: var(--sales-primary);
+            position: relative;
+            min-width: 0;
+            min-height: 118px;
+            overflow: hidden;
+            border: 1px solid var(--sales-border) !important;
+            border-left: 4px solid var(--sales-stat-color) !important;
+            border-radius: .78rem !important;
+            padding: .78rem .86rem !important;
+            background: var(--sales-surface) !important;
+            box-shadow: 0 7px 19px rgba(15, 23, 42, .055) !important;
+            transition:
+                transform .16s ease,
+                border-color .16s ease,
+                box-shadow .16s ease;
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat::after {
+            content: "";
+            position: absolute;
+            top: -30px;
+            right: -28px;
+            width: 84px;
+            height: 84px;
+            border-radius: 999px;
+            background: color-mix(
+                in srgb,
+                var(--sales-stat-color) 8%,
+                transparent
+            );
+            pointer-events: none;
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat:hover {
+            transform: translateY(-2px);
+            border-color: color-mix(
+                in srgb,
+                var(--sales-stat-color) 34%,
+                var(--sales-border)
+            ) !important;
+            box-shadow: 0 13px 26px rgba(15, 23, 42, .09) !important;
+        }
+
+        .dark .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat {
+            background: #111827 !important;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, .22) !important;
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat:nth-child(2) {
+            --sales-stat-color: var(--sales-success);
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat:nth-child(3) {
+            --sales-stat-color: var(--sales-accent);
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat:nth-child(4) {
+            --sales-stat-color: var(--sales-danger);
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat:nth-child(5) {
+            --sales-stat-color: #2563eb;
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat:nth-child(6) {
+            --sales-stat-color: #7c3aed;
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat-label {
+            position: relative;
+            z-index: 1;
+            color: var(--sales-muted) !important;
+            font-size: .61rem !important;
+            font-weight: 900 !important;
+            letter-spacing: .055em;
+            text-transform: uppercase;
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat-value {
+            position: relative;
+            z-index: 1;
+            margin-top: .32rem;
+            color: var(--sales-heading) !important;
+            font-size: clamp(1.28rem, 2vw, 1.82rem) !important;
+            font-weight: 950 !important;
+            letter-spacing: -.04em;
+            line-height: 1;
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat-description {
+            position: relative;
+            z-index: 1;
+            margin-top: .3rem;
+            color: var(--sales-muted) !important;
+            font-size: .62rem !important;
+            line-height: 1.32;
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat-icon {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            width: 1.75rem;
+            height: 1.75rem;
+            place-items: center;
+            border: 1px solid color-mix(
+                in srgb,
+                var(--sales-stat-color) 24%,
+                var(--sales-border)
+            );
+            border-radius: .55rem;
+            color: var(--sales-stat-color) !important;
+            background: color-mix(
+                in srgb,
+                var(--sales-stat-color) 8%,
+                var(--sales-surface)
+            );
+        }
+
+        .sales-dashboard-widget-stats
+        .fi-wi-stats-overview-stat::before {
+            content: "";
+            position: absolute;
+            right: .65rem;
+            bottom: 0;
+            left: .65rem;
+            height: 2px;
+            border-radius: 999px;
+            background: linear-gradient(
+                90deg,
+                var(--sales-stat-color),
+                color-mix(
+                    in srgb,
+                    var(--sales-stat-color) 18%,
+                    transparent
+                )
+            );
+        }
+
+        /*
+         * Both principal trend charts occupy independent full-width rows.
+         */
+        .sales-dashboard-widget-chart {
+            grid-column: 1 / -1;
+            border-top: 4px solid var(--sales-primary);
+            background:
+                radial-gradient(
+                    circle at 96% 0%,
+                    color-mix(
+                        in srgb,
+                        var(--sales-primary) 7%,
+                        transparent
+                    ),
+                    transparent 28%
+                ),
+                var(--sales-surface);
+        }
+
+        .sales-dashboard-widget-chart[data-chart="payment-method"] {
+            border-top-color: var(--sales-accent);
+            background:
+                radial-gradient(
+                    circle at 96% 0%,
+                    color-mix(
+                        in srgb,
+                        var(--sales-accent) 8%,
+                        transparent
+                    ),
+                    transparent 28%
+                ),
+                var(--sales-surface);
+        }
+
+        .sales-dashboard-widget-chart
+        .sales-dashboard-widget-inner {
+            min-height: 390px;
+            padding: .5rem;
+        }
+
+        .sales-dashboard-widget-chart
+        .fi-wi-chart {
+            min-height: 370px;
+        }
+
+        .sales-dashboard-widget-chart
+        .fi-wi-chart canvas {
+            min-height: 300px !important;
+            max-height: 380px !important;
+        }
+
+        .sales-dashboard-widget-table {
+            grid-column: 1 / -1;
+            border-top: 4px solid var(--sales-secondary);
+        }
+
+        @media (min-width: 760px) {
+            .sales-dashboard-widget-stats
+            .fi-wi-stats-overview-stats-ctn {
+                grid-template-columns:
+                    repeat(2, minmax(0, 1fr)) !important;
+                gap: .85rem !important;
+            }
+
+            .sales-dashboard-widget-stats
+            .fi-wi-stats-overview-stat {
+                min-height: 124px;
+                padding: .82rem .9rem !important;
+            }
+        }
+
+        @media (min-width: 1100px) {
+            .sales-dashboard-widget-stats
+            .fi-wi-stats-overview-stats-ctn {
+                grid-template-columns:
+                    repeat(4, minmax(0, 1fr)) !important;
+                gap: .9rem !important;
+            }
+
+            .sales-dashboard-widget-stats
+            .fi-wi-stats-overview-stat {
+                min-height: 128px;
+                padding: .86rem .94rem !important;
+            }
+
+            .sales-dashboard-widget-stats
+            .fi-wi-stats-overview-stat-value {
+                font-size: clamp(1.38rem, 1.55vw, 1.9rem) !important;
+            }
+
+            .sales-dashboard-widget-stats
+            .fi-wi-stats-overview-stat-description {
+                font-size: .63rem !important;
+            }
+        }
+
+        @media (max-width: 639px) {
+            .sales-dashboard-widget-chart
+            .sales-dashboard-widget-inner {
+                min-height: 360px;
+                padding: .3rem;
+            }
+
+            .sales-dashboard-widget-chart
+            .fi-wi-chart {
+                min-height: 340px;
+            }
+
+            .sales-dashboard-widget-chart
+            .fi-wi-chart canvas {
+                min-height: 280px !important;
+            }
+
+            .sales-dashboard-widget-stats
+            .fi-wi-stats-overview-stat {
+                min-height: 112px;
+                padding: .7rem !important;
+            }
+
+            .sales-dashboard-widget-stats
+            .fi-wi-stats-overview-stat-value {
+                font-size: 1.16rem !important;
+            }
+        }
+
+        .sales-dashboard-loading {
+            position: fixed;
+            z-index: 60;
+            right: 1rem;
+            bottom: 1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: .42rem;
+            padding: .55rem .7rem;
+            border: 1px solid var(--sales-border);
+            border-radius: .7rem;
+            color: var(--sales-heading);
+            background: var(--sales-surface);
+            box-shadow: 0 12px 28px rgba(15,23,42,.14);
+            font-size: .64rem;
+            font-weight: 850;
+        }
+
+        .sales-dashboard-spinner {
+            width: .85rem;
+            height: .85rem;
+            border: 2px solid color-mix(
+                in srgb,
+                var(--sales-primary) 24%,
+                transparent
+            );
+            border-top-color: var(--sales-primary);
+            border-radius: 999px;
+            animation: sales-dashboard-spin .75s linear infinite;
+        }
+
+        @keyframes sales-dashboard-spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .sales-dashboard-widgets {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 639px) {
+            .sales-dashboard-classic {
+                gap: .75rem;
+            }
+
+            .sales-dashboard-hero {
+                padding: .95rem;
+                border-radius: .9rem;
+            }
+
+            .sales-dashboard-period-card {
+                width: 100%;
+                min-width: 0;
+            }
+
+            .sales-dashboard-filter-heading {
+                padding: .7rem .78rem;
+            }
+
+            .sales-dashboard-filter-form {
+                padding: .75rem .78rem .8rem;
+            }
+
+            .sales-dashboard-widget {
+                border-radius: .85rem;
+            }
+        }
+    </style>
+
+    <div class="sales-dashboard-classic">
+        <section class="sales-dashboard-hero">
+            <div class="sales-dashboard-hero-content">
+                <div>
+                    <div class="sales-dashboard-eyebrow">
+                        <x-filament::icon
+                            icon="heroicon-o-chart-bar-square"
+                            class="h-4 w-4"
+                        />
+
+                        {{ $farmName }} · Sales intelligence
+                    </div>
+
+                    <div class="sales-dashboard-title">
+                        Executive Sales Performance
+                    </div>
+
+                    <div class="sales-dashboard-subtitle">
+                        Review invoice value, collections, outstanding
+                        balances, customers, payment channels, and revenue
+                        trends from one decision-ready operational dashboard.
+                    </div>
+
+                    <div class="sales-dashboard-hero-meta">
+                        <span class="sales-dashboard-hero-pill">
+                            <x-filament::icon
+                                icon="heroicon-o-calendar-days"
+                                class="h-4 w-4"
+                            />
+                            {{ $dateFrom }} — {{ $dateTo }}
+                        </span>
+
+                        <span class="sales-dashboard-hero-pill">
+                            <x-filament::icon
+                                icon="heroicon-o-adjustments-horizontal"
+                                class="h-4 w-4"
+                            />
+                            {{ $activeFilterCount }}
+                            advanced filter{{ $activeFilterCount === 1 ? '' : 's' }}
+                        </span>
+
+                        <span class="sales-dashboard-hero-pill">
+                            <x-filament::icon
+                                icon="heroicon-o-squares-2x2"
+                                class="h-4 w-4"
+                            />
+                            {{ count($widgets) }}
+                            visible widget{{ count($widgets) === 1 ? '' : 's' }}
+                        </span>
+                    </div>
                 </div>
-            @endforeach
+
+                <div class="sales-dashboard-period-card">
+                    <div class="sales-dashboard-period-label">
+                        Reporting period
+                    </div>
+
+                    <div class="sales-dashboard-period-value">
+                        {{ $dateFrom }} — {{ $dateTo }}
+                    </div>
+
+                    <div class="sales-dashboard-period-note">
+                        {{ $farmTagline }}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="sales-dashboard-filter-shell">
+            <div class="sales-dashboard-filter-heading">
+                <div class="sales-dashboard-filter-title">
+                    <x-filament::icon
+                        icon="heroicon-o-funnel"
+                        class="h-4 w-4"
+                    />
+
+                    Report Filters
+                </div>
+
+                <div class="sales-dashboard-filter-summary">
+                    <span class="sales-dashboard-filter-chip">
+                        Payment:
+                        <strong>{{ $paymentStatusLabel }}</strong>
+                    </span>
+
+                    <span class="sales-dashboard-filter-chip">
+                        Invoice:
+                        <strong>{{ $invoiceStatusLabel }}</strong>
+                    </span>
+
+                    <span class="sales-dashboard-filter-chip">
+                        Method:
+                        <strong>{{ $paymentMethodLabel }}</strong>
+                    </span>
+                </div>
+            </div>
+
+            <div class="sales-dashboard-filter-form">
+                <form wire:submit.prevent>
+                    {{ $this->form }}
+                </form>
+            </div>
+        </section>
+
+        @if (count($widgets) > 0)
+            <section class="sales-dashboard-widgets">
+                @foreach ($widgets as $widget)
+                    @php
+                        $widgetName = str($widget)
+                            ->afterLast('\\')
+                            ->toString();
+
+                        $isStatsWidget =
+                            str_contains($widgetName, 'Stats');
+
+                        $isTableWidget =
+                            str_contains($widgetName, 'Table');
+
+                        $isRevenueTrend =
+                            str_contains($widgetName, 'Revenue')
+                            && str_contains($widgetName, 'Chart');
+
+                        $isPaymentMethodTrend =
+                            str_contains($widgetName, 'PaymentMethod')
+                            && str_contains($widgetName, 'Chart');
+
+                        $isPrimaryChart =
+                            $isRevenueTrend
+                            || $isPaymentMethodTrend;
+
+                        $isFullWidth =
+                            $isStatsWidget
+                            || $isTableWidget
+                            || $isPrimaryChart
+                            || str_contains($widgetName, 'Summary')
+                            || str_contains($widgetName, 'Overview');
+                    @endphp
+
+                    <div
+                        wire:key="sales-widget-{{ str($widget)->afterLast('\\')->kebab() }}-{{ $filterKey }}"
+                        @class([
+                            'sales-dashboard-widget',
+                            'sales-dashboard-widget-full' => $isFullWidth,
+                            'sales-dashboard-widget-stats' => $isStatsWidget,
+                            'sales-dashboard-widget-table' => $isTableWidget,
+                            'sales-dashboard-widget-chart' => $isPrimaryChart,
+                        ])
+                        @if ($isRevenueTrend)
+                            data-chart="revenue"
+                        @elseif ($isPaymentMethodTrend)
+                            data-chart="payment-method"
+                        @endif
+                    >
+                        <div class="sales-dashboard-widget-inner">
+                            @livewire(
+                                $widget,
+                                ['filters' => $this->filters],
+                                key($widget . '-' . $filterKey)
+                            )
+                        </div>
+                    </div>
+                @endforeach
+            </section>
+        @else
+            <section class="sales-dashboard-empty">
+                <div>
+                    <div class="sales-dashboard-empty-icon">
+                        <x-filament::icon
+                            icon="heroicon-o-squares-2x2"
+                            class="h-5 w-5"
+                        />
+                    </div>
+
+                    <div class="sales-dashboard-empty-title">
+                        No dashboard widgets are visible
+                    </div>
+
+                    <div class="sales-dashboard-empty-text">
+                        Use the Customize action to select the sales widgets
+                        you want to display on this dashboard.
+                    </div>
+                </div>
+            </section>
+        @endif
+
+        <div
+            wire:loading.flex
+            wire:target="filters"
+            class="sales-dashboard-loading"
+        >
+            <span class="sales-dashboard-spinner"></span>
+            Refreshing sales intelligence…
         </div>
     </div>
 </x-filament-panels::page>

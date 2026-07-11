@@ -86,7 +86,7 @@ class ProgenyAnalyticsService
 
     public function damMetrics(Animal $animal): array
     {
-        $records = BreedingRecord::query()
+        $records = BreedingRecord::withTrashed()
             ->where('female_animal_id', $animal->id)
             ->orderBy('mating_date')
             ->get();

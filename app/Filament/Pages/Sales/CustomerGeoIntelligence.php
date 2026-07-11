@@ -16,7 +16,7 @@ class CustomerGeoIntelligence extends Page
 
     protected static ?string $navigationLabel = 'Geo Intelligence';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 20;
 
     protected static ?string $title = 'Customer Geo Intelligence';
 

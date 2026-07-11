@@ -17,7 +17,7 @@ class AuditSettings extends Page implements Forms\Contracts\HasForms
 
   protected static ?string $navigationGroup = 'Audit Logs';
 
-protected static ?string $navigationLabel = 'Settings';
+protected static ?string $navigationLabel = 'Setting(s)';
 
 protected static ?string $title = 'Audit Settings';
 

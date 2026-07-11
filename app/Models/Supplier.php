@@ -52,7 +52,10 @@ class Supplier extends Model
     {
         return (float) PurchaseOrderPayment::query()
             ->whereNull('purchase_order_payments.deleted_at')
-            ->where('purchase_order_payments.status', 'successful')
+            ->whereIn(
+                'purchase_order_payments.status',
+                ['successful', 'paid', 'approved', 'completed']
+            )
             ->whereHas('purchaseOrder', function ($query) {
                 $query->where('supplier_id', $this->id);
             })
@@ -62,5 +65,17 @@ class Supplier extends Model
     public function getBalanceDueAttribute(): float
     {
         return max(0, $this->total_purchases - $this->total_paid);
+    }
+
+    public function hasProcurementHistory(): bool
+    {
+        return $this->purchaseOrders()
+            ->withTrashed()
+            ->exists();
+    }
+
+    public function canBeDeletedSafely(): bool
+    {
+        return ! $this->hasProcurementHistory();
     }
 }

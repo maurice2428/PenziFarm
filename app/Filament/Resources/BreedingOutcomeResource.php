@@ -29,7 +29,7 @@ class BreedingOutcomeResource extends Resource
 
     protected static ?string $navigationGroup = 'Breeding Management';
 
-    protected static ?string $navigationLabel = 'Breeding Outcomes';
+    protected static ?string $navigationLabel = 'Outcome(s)';
 
     protected static ?string $modelLabel = 'Breeding Outcome';
 
@@ -492,11 +492,15 @@ class BreedingOutcomeResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
-                'female.breed',
-                'male.breed',
-                'batch',
-            ]))
+            ->modifyQueryUsing(
+                fn (Builder $query): Builder => $query
+                    ->with([
+                        'female.breed',
+                        'male.breed',
+                        'batch',
+                    ])
+                    ->whereHas('batch')
+            )
             ->columns([
                 Tables\Columns\TextColumn::make('female.tag_number')->label('Dam')->searchable()->weight('bold'),
                 Tables\Columns\TextColumn::make('male.tag_number')->label('Sire')->searchable(),

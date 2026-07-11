@@ -200,7 +200,7 @@ class PurchaseOrder extends Model
     {
         $paid = (float) $this
             ->payments()
-            ->where('status', 'successful')
+            ->successful()
             ->whereNull('deleted_at')
             ->sum('amount');
 
@@ -220,41 +220,49 @@ class PurchaseOrder extends Model
         ])->saveQuietly();
     }
 
-    public function receiveStock(): void
+    public function hasSuccessfulPayments(): bool
     {
-        $this->loadMissing('items.inventoryItem');
+        return $this->payments()
+            ->successful()
+            ->whereNull('deleted_at')
+            ->exists();
+    }
 
-        foreach ($this->items as $item) {
-            if ((float) $item->quantity_received <= 0) {
-                continue;
-            }
+    public function hasActiveReceipts(): bool
+    {
+        return $this->receipts()
+            ->whereNotIn('status', ['reversed', 'cancelled'])
+            ->whereNull('deleted_at')
+            ->exists();
+    }
 
-            StockMovement::updateOrCreate(
-                [
-                    'purchase_order_item_id' => $item->id,
-                    'source' => 'purchase',
-                ],
-                [
-                    'inventory_item_id' => $item->inventory_item_id,
-                    'purchase_order_id' => $this->id,
-                    'type' => 'in',
-                    'quantity' => abs((float) $item->quantity_received),
-                    'unit_cost' => (float) $item->unit_cost,
-                    'movement_date' => now('Africa/Nairobi')->toDateString(),
-                    'reference' => $this->purchase_order_number,
-                    'notes' => 'Stock received from ' . $this->purchase_order_number,
-                    'created_by' => auth()->id(),
-                ]
-            );
+    public function hasInventoryHistory(): bool
+    {
+        return $this->stockMovements()
+            ->whereNull('deleted_at')
+            ->exists();
+    }
 
-            $item->inventoryItem?->update([
-                'unit_cost' => $item->unit_cost,
-                'expiry_date' => $item->expiry_date,
-            ]);
-        }
+    public function canBeDeletedSafely(): bool
+    {
+        return in_array($this->status, ['draft', 'cancelled'], true)
+            && ! $this->hasSuccessfulPayments()
+            && ! $this->hasActiveReceipts()
+            && ! $this->hasInventoryHistory();
+    }
 
-        $this->forceFill([
-            'status' => 'received',
-        ])->saveQuietly();
+    public function canBeCancelledSafely(): bool
+    {
+        return ! in_array($this->status, ['received', 'cancelled'], true)
+            && ! $this->hasSuccessfulPayments()
+            && ! $this->hasActiveReceipts();
+    }
+
+    public function receiveStock(): ?PurchaseOrderReceipt
+    {
+        return app(
+            \App\Services\Procurement\PurchaseReceivingService::class
+        )->receiveAllRemaining($this);
     }
 }
+

@@ -15,12 +15,15 @@ class AccountingAccount extends Model
     use SoftDeletes;
 
     protected $table = 'accounting_accounts';
-
     protected $guarded = [];
 
     protected $casts = [
         'is_active' => 'boolean',
         'is_system' => 'boolean',
+        'is_control_account' => 'boolean',
+        'allow_manual_posting' => 'boolean',
+        'requires_cost_center' => 'boolean',
+        'requires_project' => 'boolean',
         'sort_order' => 'integer',
     ];
 
@@ -30,7 +33,6 @@ class AccountingAccount extends Model
     public const TYPE_INCOME = 'income';
     public const TYPE_COST_OF_SALES = 'cost_of_sales';
     public const TYPE_EXPENSE = 'expense';
-
     public const NORMAL_DEBIT = 'debit';
     public const NORMAL_CREDIT = 'credit';
 
@@ -48,7 +50,7 @@ class AccountingAccount extends Model
 
     public function parent(): BelongsTo
     {
-        return $this->belongsTo(self::class, 'parent_id');
+        return $this->belongsTo(self::class, 'parent_id')->withTrashed();
     }
 
     public function children(): HasMany
@@ -66,6 +68,11 @@ class AccountingAccount extends Model
         return $this->hasMany(AccountingOpeningBalance::class, 'account_id');
     }
 
+    public function mappings(): HasMany
+    {
+        return $this->hasMany(AccountingAccountMapping::class, 'account_id');
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
@@ -74,6 +81,11 @@ class AccountingAccount extends Model
     public function scopeLeaf(Builder $query): Builder
     {
         return $query->whereDoesntHave('children');
+    }
+
+    public function scopePostable(Builder $query): Builder
+    {
+        return $query->active()->leaf();
     }
 
     public function isDebitNormal(): bool
@@ -89,5 +101,18 @@ class AccountingAccount extends Model
         return $this->isDebitNormal()
             ? round($debit - $credit, 2)
             : round($credit - $debit, 2);
+    }
+
+    public function hasActivity(): bool
+    {
+        return $this->journalLines()->exists()
+            || $this->openingBalances()->exists()
+            || $this->mappings()->exists()
+            || $this->children()->withTrashed()->exists();
+    }
+
+    public function canBeDeletedSafely(): bool
+    {
+        return ! $this->is_system && ! $this->hasActivity();
     }
 }

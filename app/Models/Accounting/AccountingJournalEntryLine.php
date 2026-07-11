@@ -11,33 +11,34 @@ class AccountingJournalEntryLine extends Model
     use HasFactory;
 
     protected $table = 'accounting_journal_entry_lines';
-
     protected $guarded = [];
 
     protected $casts = [
         'debit' => 'decimal:2',
         'credit' => 'decimal:2',
+        'tax_rate' => 'decimal:4',
+        'tax_amount' => 'decimal:2',
         'metadata' => 'array',
     ];
 
     public function journalEntry(): BelongsTo
     {
-        return $this->belongsTo(AccountingJournalEntry::class, 'journal_entry_id');
+        return $this->belongsTo(AccountingJournalEntry::class, 'journal_entry_id')->withTrashed();
     }
 
     public function account(): BelongsTo
     {
-        return $this->belongsTo(AccountingAccount::class, 'account_id');
+        return $this->belongsTo(AccountingAccount::class, 'account_id')->withTrashed();
     }
 
     public function costCenter(): BelongsTo
     {
-        return $this->belongsTo(AccountingCostCenter::class, 'cost_center_id');
+        return $this->belongsTo(AccountingCostCenter::class, 'cost_center_id')->withTrashed();
     }
 
     public function projectFund(): BelongsTo
     {
-        return $this->belongsTo(AccountingProjectFund::class, 'project_fund_id');
+        return $this->belongsTo(AccountingProjectFund::class, 'project_fund_id')->withTrashed();
     }
 
     public function hasAmount(): bool

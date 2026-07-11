@@ -360,7 +360,14 @@ class AnimalWeightResource extends Resource
                     ->visible(fn() =>
                         auth()->user()?->can('view animals'))
                     ->color('success')
-                    ->url(fn($record) => AnimalResource::getUrl('edit', ['record' => $record->animal_id]))
+                    ->url(
+                        fn (AnimalWeight $record): ?string =>
+                            $record->animal_id
+                                ? AnimalResource::getUrl('profile', [
+                                    'record' => $record->animal_id,
+                                ])
+                                : null
+                    )
                     ->openUrlInNewTab(),
                 /*  Tables\Actions\DeleteAction::make()
                       ->label('')

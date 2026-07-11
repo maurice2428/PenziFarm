@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\PurchaseOrderResource\Pages;
 
 use App\Filament\Resources\PurchaseOrderResource;
-use App\Models\PurchaseOrderPayment;
+use App\Services\Procurement\ProcurementLifecycleService;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 
@@ -15,16 +15,61 @@ class CreatePurchaseOrder extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        /*
+         * Initial-payment controls are intentionally non-dehydrated so
+         * they never become PurchaseOrder columns. Read them from the
+         * Livewire form state before creating the PO.
+         */
+        $rawState = $this->data ?? [];
+
         $this->initialPayment = [
-            'record' => (bool) ($data['record_initial_payment'] ?? false),
-            'payment_date' => $data['initial_payment_date'] ?? now('Africa/Nairobi')->toDateString(),
-            'amount' => (float) ($data['initial_payment_amount'] ?? 0),
-            'payment_method' => $data['initial_payment_method'] ?? null,
-            'mpesa_reference' => $data['initial_mpesa_reference'] ?? null,
-            'bank_name' => $data['initial_bank_name'] ?? null,
-            'bank_reference' => $data['initial_bank_reference'] ?? null,
-            'cheque_number' => $data['initial_cheque_number'] ?? null,
-            'notes' => $data['initial_payment_notes'] ?? null,
+            'record' => (bool) (
+                $rawState['record_initial_payment']
+                ?? false
+            ),
+            'paid_at' =>
+                $rawState['initial_paid_at']
+                ?? now('Africa/Nairobi'),
+            'amount' => (float) (
+                $rawState['initial_payment_amount']
+                ?? 0
+            ),
+            'payment_method' =>
+                $rawState['initial_payment_method']
+                ?? null,
+            'mpesa_receipt_number' =>
+                $rawState['initial_mpesa_reference']
+                ?? null,
+            'mpesa_phone' =>
+                $rawState['initial_mpesa_phone']
+                ?? null,
+            'mpesa_merchant_request_id' =>
+                $rawState[
+                    'initial_mpesa_merchant_request_id'
+                ] ?? null,
+            'mpesa_checkout_request_id' =>
+                $rawState[
+                    'initial_mpesa_checkout_request_id'
+                ] ?? null,
+            'mpesa_result_code' =>
+                $rawState['initial_mpesa_result_code']
+                ?? null,
+            'mpesa_result_description' =>
+                $rawState[
+                    'initial_mpesa_result_description'
+                ] ?? null,
+            'bank_name' =>
+                $rawState['initial_bank_name']
+                ?? null,
+            'bank_reference' =>
+                $rawState['initial_bank_reference']
+                ?? null,
+            'cheque_number' =>
+                $rawState['initial_cheque_number']
+                ?? null,
+            'notes' =>
+                $rawState['initial_payment_notes']
+                ?? null,
         ];
 
         $items = $data['items'] ?? [];
@@ -65,10 +110,15 @@ class CreatePurchaseOrder extends CreateRecord
 
         unset(
             $data['record_initial_payment'],
-            $data['initial_payment_date'],
+            $data['initial_paid_at'],
             $data['initial_payment_amount'],
             $data['initial_payment_method'],
             $data['initial_mpesa_reference'],
+            $data['initial_mpesa_phone'],
+            $data['initial_mpesa_merchant_request_id'],
+            $data['initial_mpesa_checkout_request_id'],
+            $data['initial_mpesa_result_code'],
+            $data['initial_mpesa_result_description'],
             $data['initial_bank_name'],
             $data['initial_bank_reference'],
             $data['initial_cheque_number'],
@@ -93,21 +143,63 @@ class CreatePurchaseOrder extends CreateRecord
                 (float) $this->record->grand_total
             );
 
-            PurchaseOrderPayment::create([
-                'purchase_order_id' => $this->record->id,
-                'payment_date' => $this->initialPayment['payment_date'],
-                'amount' => $amount,
-                'payment_method' => $this->initialPayment['payment_method'],
-                'status' => 'successful',
-                'mpesa_reference' => $this->initialPayment['mpesa_reference'],
-                'bank_name' => $this->initialPayment['bank_name'],
-                'bank_reference' => $this->initialPayment['bank_reference'],
-                'cheque_number' => $this->initialPayment['cheque_number'],
-                'notes' => $this->initialPayment['notes'],
-            ]);
+            app(
+                ProcurementLifecycleService::class
+            )->recordPayment(
+                $this->record,
+                [
+                    'paid_at' =>
+                        $this->initialPayment[
+                            'paid_at'
+                        ],
+                    'amount' => $amount,
+                    'payment_method' =>
+                        $this->initialPayment[
+                            'payment_method'
+                        ],
+                    'status' => 'successful',
+                    'mpesa_receipt_number' =>
+                        $this->initialPayment[
+                            'mpesa_receipt_number'
+                        ],
+                    'mpesa_phone' =>
+                        $this->initialPayment[
+                            'mpesa_phone'
+                        ],
+                    'mpesa_merchant_request_id' =>
+                        $this->initialPayment[
+                            'mpesa_merchant_request_id'
+                        ],
+                    'mpesa_checkout_request_id' =>
+                        $this->initialPayment[
+                            'mpesa_checkout_request_id'
+                        ],
+                    'mpesa_result_code' =>
+                        $this->initialPayment[
+                            'mpesa_result_code'
+                        ],
+                    'mpesa_result_description' =>
+                        $this->initialPayment[
+                            'mpesa_result_description'
+                        ],
+                    'bank_name' =>
+                        $this->initialPayment[
+                            'bank_name'
+                        ],
+                    'bank_reference' =>
+                        $this->initialPayment[
+                            'bank_reference'
+                        ],
+                    'cheque_number' =>
+                        $this->initialPayment[
+                            'cheque_number'
+                        ],
+                    'notes' =>
+                        $this->initialPayment['notes'],
+                ]
+            );
 
             $this->record->refresh();
-            $this->record->syncPaymentTotals();
 
             Notification::make()
                 ->title('Purchase order and supplier payment recorded')

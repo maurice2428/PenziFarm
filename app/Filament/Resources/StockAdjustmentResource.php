@@ -11,6 +11,7 @@ use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class StockAdjustmentResource extends Resource
 {
@@ -216,7 +217,82 @@ class StockAdjustmentResource extends Resource
                 Tables\Actions\ViewAction::make()
                     ->modalWidth('6xl'),
             ])
-            ->bulkActions([]);
+            ->bulkActions([
+                Tables\Actions\BulkAction::make(
+                    'exportSelected'
+                )
+                    ->label('Export Selected')
+                    ->icon(
+                        'heroicon-o-arrow-down-tray'
+                    )
+                    ->color('gray')
+                    ->action(
+                        function (
+                            Collection $records
+                        ) {
+                            return response()
+                                ->streamDownload(
+                                    function () use (
+                                        $records
+                                    ): void {
+                                        $handle = fopen(
+                                            'php://output',
+                                            'wb'
+                                        );
+
+                                        fputcsv($handle, [
+                                            'Adjustment No.',
+                                            'Date',
+                                            'Reason',
+                                            'Stock In',
+                                            'Stock Out',
+                                            'Value',
+                                            'Adjusted By',
+                                            'Notes',
+                                        ]);
+
+                                        foreach ($records as $record) {
+                                            fputcsv($handle, [
+                                                $record
+                                                    ->adjustment_no,
+                                                $record
+                                                    ->adjustment_date
+                                                    ?->format(
+                                                        'Y-m-d'
+                                                    ),
+                                                $record
+                                                    ->reason_label,
+                                                (float) $record
+                                                    ->total_in_quantity,
+                                                (float) $record
+                                                    ->total_out_quantity,
+                                                (float) $record
+                                                    ->total_value,
+                                                $record
+                                                    ->adjustedBy
+                                                    ?->name,
+                                                $record->notes,
+                                            ]);
+                                        }
+
+                                        fclose($handle);
+                                    },
+                                    'stock-adjustments-selected-'
+                                    . now(
+                                        'Africa/Nairobi'
+                                    )->format(
+                                        'Ymd_His'
+                                    )
+                                    . '.csv',
+                                    [
+                                        'Content-Type' =>
+                                            'text/csv',
+                                    ]
+                                );
+                        }
+                    )
+                    ->deselectRecordsAfterCompletion(),
+            ]);
     }
 
     public static function getPages(): array

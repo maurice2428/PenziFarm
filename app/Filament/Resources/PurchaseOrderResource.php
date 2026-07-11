@@ -4,9 +4,12 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\PurchaseOrderResource\Pages;
 use App\Models\HealthProduct;
+use App\Models\InventoryItem;
 use App\Models\PurchaseOrder;
-use App\Models\PurchaseOrderPayment;
 use App\Models\Supplier;
+use App\Services\Procurement\ProcurementInventoryItemService;
+use App\Services\Procurement\PurchaseReceivingService;
+use App\Services\Procurement\ProcurementLifecycleService;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
@@ -15,6 +18,8 @@ use Filament\Resources\Resource;
 use Filament\Tables\Table;
 use Filament\Forms;
 use Filament\Tables;
+use Illuminate\Database\Eloquent\Collection;
+use Throwable;
 
 class PurchaseOrderResource extends Resource
 {
@@ -40,12 +45,25 @@ class PurchaseOrderResource extends Resource
 
     public static function canEdit($record): bool
     {
-        return auth()->user()?->can('edit purchase orders') ?? false;
+        return (
+            auth()->user()?->can(
+                'edit purchase orders'
+            ) ?? false
+        )
+            && ! $record->hasSuccessfulPayments()
+            && ! $record->hasActiveReceipts();
     }
 
     public static function canDelete($record): bool
     {
-        return auth()->user()?->can('delete purchase orders') ?? false;
+        return (
+            auth()->user()?->can(
+                'delete purchase orders'
+            ) ?? false
+        )
+            && app(
+                ProcurementLifecycleService::class
+            )->canDeletePurchaseOrder($record);
     }
 
     protected static function normalizeItems(mixed $items): array
@@ -151,6 +169,45 @@ class PurchaseOrderResource extends Resource
         self::syncOrderTotals($set, $get, true);
     }
 
+    protected static function inventoryItemOptions(): array
+    {
+        return InventoryItem::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get()
+            ->mapWithKeys(function (InventoryItem $item): array {
+                $category = str($item->category ?: 'stock item')
+                    ->replace('_', ' ')
+                    ->title()
+                    ->toString();
+
+                $unit = trim((string) ($item->unit ?: 'unit'));
+
+                $stockLabel = number_format(
+                    (float) ($item->current_stock ?? 0),
+                    2
+                ) . ' ' . $unit;
+
+                $costLabel = 'KES '
+                    . number_format(
+                        (float) ($item->unit_cost ?? 0),
+                        2
+                    );
+
+                return [
+                    $item->getKey() =>
+                        $item->name
+                        . ' · '
+                        . $category
+                        . ' · Stock '
+                        . $stockLabel
+                        . ' · '
+                        . $costLabel,
+                ];
+            })
+            ->all();
+    }
+
     public static function form(Form $form): Form
     {
         return $form->schema([
@@ -206,7 +263,23 @@ class PurchaseOrderResource extends Resource
                             'received' => 'Received',
                             'cancelled' => 'Cancelled',
                         ])
+                        ->disableOptionWhen(
+                            fn (string $value): bool =>
+                                in_array(
+                                    $value,
+                                    [
+                                        'partially_received',
+                                        'received',
+                                    ],
+                                    true
+                                )
+                        )
+                        ->helperText(
+                            'Partially Received and Received are updated '
+                            . 'automatically by the Goods Received Note workflow.'
+                        )
                         ->required()
+                        ->native(false)
                         ->prefixIcon('heroicon-o-check-circle'),
                     Forms\Components\Textarea::make('notes')
                         ->label('Notes')
@@ -214,43 +287,183 @@ class PurchaseOrderResource extends Resource
                         ->columnSpanFull(),
                 ]),
             Forms\Components\Section::make('Procurement Items')
-                ->description('Each product can have its own quantity, unit cost, item discount, and tax rate.')
+                ->description('Select stock items directly from Inventory. Each line supports quantity, unit cost, item discount, supplier batch, expiry date, and tax.')
                 ->icon('heroicon-o-cube')
                 ->schema([
                     Forms\Components\Repeater::make('items')
                         ->relationship()
                         ->label('Procurement Items')
+                        ->itemLabel(function (array $state): string {
+                            $inventoryItemId =
+                                $state['inventory_item_id'] ?? null;
+
+                            if (! $inventoryItemId) {
+                                return 'New procurement item';
+                            }
+
+                            return InventoryItem::query()
+                                ->whereKey($inventoryItemId)
+                                ->value('name')
+                                ?: 'Procurement item';
+                        })
+                        ->collapsible()
                         ->live()
                         ->afterStateUpdated(function (Set $set, Get $get): void {
                             self::syncOrderTotals($set, $get);
                         })
                         ->schema([
-                            Forms\Components\Select::make('health_product_id')
-                                ->label('Product')
-                                ->options(fn() => HealthProduct::query()
-                                    ->where('status', 'active')
-                                    ->orderBy('name')
-                                    ->pluck('name', 'id'))
+                            Forms\Components\Select::make('inventory_item_id')
+                                ->label('Stock Item')
+                                ->options(
+                                    fn (): array =>
+                                        self::inventoryItemOptions()
+                                )
                                 ->searchable()
                                 ->preload()
                                 ->live()
+                                ->native(false)
                                 ->required()
-                                ->prefixIcon('heroicon-o-beaker')
-                                ->afterStateUpdated(function ($state, Set $set, Get $get): void {
-                                    $product = HealthProduct::with('inventoryItem')->find($state);
+                                ->prefixIcon('heroicon-o-cube')
+                                ->placeholder(
+                                    'Search inventory or add a stock item'
+                                )
+                                ->helperText(
+                                    'Items are loaded directly from Inventory '
+                                    . '→ Stock Items. Use the plus action to '
+                                    . 'register a missing item without leaving '
+                                    . 'this purchase order.'
+                                )
+                                ->disableOptionsWhenSelectedInSiblingRepeaterItems()
+                                ->createOptionForm(
+                                    fn (): array =>
+                                        InventoryItemResource
+                                            ::procurementCreateSchema()
+                                )
+                                ->createOptionUsing(
+                                    function (array $data): int {
+                                        $item = app(
+                                            ProcurementInventoryItemService::class
+                                        )->create($data);
 
-                                    if (!$product) {
-                                        return;
+                                        Notification::make()
+                                            ->success()
+                                            ->title('Stock item registered')
+                                            ->body(
+                                                $item->name
+                                                . ' is now available for '
+                                                . 'procurement and inventory.'
+                                            )
+                                            ->send();
+
+                                        return (int) $item->getKey();
                                     }
+                                )
+                                ->createOptionAction(
+                                    fn (
+                                        \Filament\Forms\Components\Actions\Action $action
+                                    ) => $action
+                                        ->label('Add New Stock Item')
+                                        ->icon('heroicon-o-plus-circle')
+                                        ->slideOver()
+                                        ->modalWidth('6xl')
+                                        ->modalHeading(
+                                            'Register Inventory Stock Item'
+                                        )
+                                        ->modalDescription(
+                                            'Add the item to the central stock '
+                                            . 'catalog. It will be selected on '
+                                            . 'this purchase line automatically.'
+                                        )
+                                        ->modalSubmitActionLabel(
+                                            'Save & Select Item'
+                                        )
+                                )
+                                ->hintAction(
+                                    \Filament\Forms\Components\Actions\Action::make(
+                                        'openInventoryCatalog'
+                                    )
+                                        ->label('Open stock catalog')
+                                        ->icon(
+                                            'heroicon-o-arrow-top-right-on-square'
+                                        )
+                                        ->url(
+                                            InventoryItemResource::getUrl(
+                                                'index'
+                                            )
+                                        )
+                                        ->openUrlInNewTab()
+                                )
+                                ->afterStateUpdated(
+                                    function (
+                                        mixed $state,
+                                        Set $set,
+                                        Get $get
+                                    ): void {
+                                        $item = InventoryItem::query()
+                                            ->find($state);
 
-                                    $set('inventory_item_id', $product->inventory_item_id);
-                                    $set('unit_cost', (float) ($product->inventoryItem?->unit_cost ?? 0));
+                                        if (! $item) {
+                                            $set('health_product_id', null);
+                                            $set('unit_cost', 0);
 
-                                    self::syncLineTotals($set, $get);
-                                }),
-                            Forms\Components\Hidden::make('inventory_item_id'),
+                                            self::syncLineTotals(
+                                                $set,
+                                                $get
+                                            );
+
+                                            return;
+                                        }
+
+                                        $set(
+                                            'health_product_id',
+                                            HealthProduct::query()
+                                                ->where(
+                                                    'inventory_item_id',
+                                                    $item->getKey()
+                                                )
+                                                ->value('id')
+                                        );
+
+                                        $set(
+                                            'unit_cost',
+                                            (float) (
+                                                $item->unit_cost ?? 0
+                                            )
+                                        );
+
+                                        if (
+                                            blank($get('expiry_date'))
+                                            && filled($item->expiry_date)
+                                        ) {
+                                            $set(
+                                                'expiry_date',
+                                                $item->expiry_date
+                                                    ->format('Y-m-d')
+                                            );
+                                        }
+
+                                        self::syncLineTotals(
+                                            $set,
+                                            $get
+                                        );
+                                    }
+                                )
+                                ->columnSpan([
+                                    'default' => 1,
+                                    'md' => 6,
+                                    'xl' => 6,
+                                ]),
+
+                            Forms\Components\Hidden::make(
+                                'health_product_id'
+                            ),
                             Forms\Components\TextInput::make('quantity_ordered')
                                 ->label('Qty Ordered')
+                                ->columnSpan([
+                                    'default' => 1,
+                                    'md' => 3,
+                                    'xl' => 3,
+                                ])
                                 ->numeric()
                                 ->default(1)
                                 ->required()
@@ -259,11 +472,27 @@ class PurchaseOrderResource extends Resource
                                 ->afterStateUpdated(fn(Set $set, Get $get) => self::syncLineTotals($set, $get)),
                             Forms\Components\TextInput::make('quantity_received')
                                 ->label('Qty Received')
+                                ->columnSpan([
+                                    'default' => 1,
+                                    'md' => 3,
+                                    'xl' => 3,
+                                ])
                                 ->numeric()
                                 ->default(0)
+                                ->readOnly()
+                                ->dehydrated()
+                                ->helperText(
+                                    'Updated automatically when stock is '
+                                    . 'posted through a Goods Received Note.'
+                                )
                                 ->prefixIcon('heroicon-o-archive-box'),
                             Forms\Components\TextInput::make('unit_cost')
                                 ->label('Unit Cost')
+                                ->columnSpan([
+                                    'default' => 1,
+                                    'md' => 3,
+                                    'xl' => 3,
+                                ])
                                 ->numeric()
                                 ->default(0)
                                 ->required()
@@ -272,6 +501,11 @@ class PurchaseOrderResource extends Resource
                                 ->afterStateUpdated(fn(Set $set, Get $get) => self::syncLineTotals($set, $get)),
                             Forms\Components\TextInput::make('line_subtotal')
                                 ->label('Line Subtotal')
+                                ->columnSpan([
+                                    'default' => 1,
+                                    'md' => 3,
+                                    'xl' => 3,
+                                ])
                                 ->numeric()
                                 ->default(0)
                                 ->readOnly()
@@ -279,6 +513,11 @@ class PurchaseOrderResource extends Resource
                                 ->prefixIcon('heroicon-o-calculator'),
                             Forms\Components\TextInput::make('discount_amount')
                                 ->label('Item Discount')
+                                ->columnSpan([
+                                    'default' => 1,
+                                    'md' => 3,
+                                    'xl' => 3,
+                                ])
                                 ->numeric()
                                 ->default(0)
                                 ->live(onBlur: true)
@@ -286,6 +525,11 @@ class PurchaseOrderResource extends Resource
                                 ->afterStateUpdated(fn(Set $set, Get $get) => self::syncLineTotals($set, $get)),
                             Forms\Components\TextInput::make('tax_rate')
                                 ->label('Tax %')
+                                ->columnSpan([
+                                    'default' => 1,
+                                    'md' => 3,
+                                    'xl' => 3,
+                                ])
                                 ->numeric()
                                 ->default(0)
                                 ->live(onBlur: true)
@@ -293,6 +537,11 @@ class PurchaseOrderResource extends Resource
                                 ->afterStateUpdated(fn(Set $set, Get $get) => self::syncLineTotals($set, $get)),
                             Forms\Components\TextInput::make('tax_amount')
                                 ->label('Tax Amount')
+                                ->columnSpan([
+                                    'default' => 1,
+                                    'md' => 3,
+                                    'xl' => 3,
+                                ])
                                 ->numeric()
                                 ->default(0)
                                 ->readOnly()
@@ -300,6 +549,11 @@ class PurchaseOrderResource extends Resource
                                 ->prefixIcon('heroicon-o-receipt-percent'),
                             Forms\Components\TextInput::make('line_total')
                                 ->label('Line Total')
+                                ->columnSpan([
+                                    'default' => 1,
+                                    'md' => 3,
+                                    'xl' => 3,
+                                ])
                                 ->numeric()
                                 ->default(0)
                                 ->readOnly()
@@ -307,13 +561,27 @@ class PurchaseOrderResource extends Resource
                                 ->prefixIcon('heroicon-o-currency-dollar'),
                             Forms\Components\TextInput::make('batch_number')
                                 ->label('Batch Number')
+                                ->columnSpan([
+                                    'default' => 1,
+                                    'md' => 3,
+                                    'xl' => 3,
+                                ])
                                 ->prefixIcon('heroicon-o-hashtag'),
                             Forms\Components\DatePicker::make('expiry_date')
                                 ->label('Expiry Date')
+                                ->columnSpan([
+                                    'default' => 1,
+                                    'md' => 3,
+                                    'xl' => 3,
+                                ])
                                 ->prefixIcon('heroicon-o-calendar-days'),
                         ])
-                        ->columns(4)
-                        ->addActionLabel('Add Product')
+                        ->columns([
+                            'default' => 1,
+                            'md' => 6,
+                            'xl' => 12,
+                        ])
+                        ->addActionLabel('Add Another Stock Item')
                         ->reorderable(false)
                         ->columnSpanFull(),
                 ]),
@@ -395,12 +663,21 @@ class PurchaseOrderResource extends Resource
                             self::syncOrderTotals($set, $get);
                         })
                         ->columnSpanFull(),
-                    Forms\Components\DatePicker::make('initial_payment_date')
-                        ->label('Payment Date')
+                    Forms\Components\DateTimePicker::make('initial_paid_at')
+                        ->label('Payment Date & Time')
                         ->default(now('Africa/Nairobi'))
-                        ->visible(fn(Get $get) => (bool) $get('record_initial_payment'))
+                        ->seconds(false)
+                        ->native(false)
+                        ->visible(
+                            fn (Get $get): bool =>
+                                (bool) $get(
+                                    'record_initial_payment'
+                                )
+                        )
                         ->dehydrated(false)
-                        ->prefixIcon('heroicon-o-calendar-days'),
+                        ->prefixIcon(
+                            'heroicon-o-calendar-days'
+                        ),
                     Forms\Components\TextInput::make('initial_payment_amount')
                         ->label('Amount Paid')
                         ->numeric()
@@ -425,12 +702,96 @@ class PurchaseOrderResource extends Resource
                         ->dehydrated(false)
                         ->prefixIcon('heroicon-o-credit-card'),
                     Forms\Components\TextInput::make('initial_mpesa_reference')
-                        ->label('M-Pesa Reference')
-                        ->visible(fn(Get $get) =>
-                            (bool) $get('record_initial_payment') &&
-                            $get('initial_payment_method') === 'mpesa_b2b')
+                        ->label('M-Pesa Receipt / Code')
+                        ->visible(
+                            fn (Get $get): bool =>
+                                (bool) $get(
+                                    'record_initial_payment'
+                                )
+                                && $get(
+                                    'initial_payment_method'
+                                ) === 'mpesa_b2b'
+                        )
                         ->dehydrated(false)
-                        ->prefixIcon('heroicon-o-device-phone-mobile'),
+                        ->prefixIcon(
+                            'heroicon-o-hashtag'
+                        ),
+
+                    Forms\Components\TextInput::make('initial_mpesa_phone')
+                        ->label('M-Pesa Phone')
+                        ->tel()
+                        ->visible(
+                            fn (Get $get): bool =>
+                                (bool) $get(
+                                    'record_initial_payment'
+                                )
+                                && $get(
+                                    'initial_payment_method'
+                                ) === 'mpesa_b2b'
+                        )
+                        ->dehydrated(false)
+                        ->prefixIcon('heroicon-o-phone'),
+
+                    Forms\Components\TextInput::make(
+                        'initial_mpesa_merchant_request_id'
+                    )
+                        ->label('STK Merchant Request ID')
+                        ->visible(
+                            fn (Get $get): bool =>
+                                (bool) $get(
+                                    'record_initial_payment'
+                                )
+                                && $get(
+                                    'initial_payment_method'
+                                ) === 'mpesa_b2b'
+                        )
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make(
+                        'initial_mpesa_checkout_request_id'
+                    )
+                        ->label('STK Checkout Request ID')
+                        ->visible(
+                            fn (Get $get): bool =>
+                                (bool) $get(
+                                    'record_initial_payment'
+                                )
+                                && $get(
+                                    'initial_payment_method'
+                                ) === 'mpesa_b2b'
+                        )
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make(
+                        'initial_mpesa_result_code'
+                    )
+                        ->label('M-Pesa Result Code')
+                        ->visible(
+                            fn (Get $get): bool =>
+                                (bool) $get(
+                                    'record_initial_payment'
+                                )
+                                && $get(
+                                    'initial_payment_method'
+                                ) === 'mpesa_b2b'
+                        )
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make(
+                        'initial_mpesa_result_description'
+                    )
+                        ->label('M-Pesa Result Description')
+                        ->visible(
+                            fn (Get $get): bool =>
+                                (bool) $get(
+                                    'record_initial_payment'
+                                )
+                                && $get(
+                                    'initial_payment_method'
+                                ) === 'mpesa_b2b'
+                        )
+                        ->dehydrated(false),
+
                     Forms\Components\TextInput::make('initial_bank_name')
                         ->label('Bank Name')
                         ->visible(fn(Get $get) =>
@@ -514,6 +875,31 @@ class PurchaseOrderResource extends Resource
                     ->label('Balance')
                     ->money('KES'),
             ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('supplier_id')
+                    ->label('Supplier')
+                    ->relationship('supplier', 'company_name')
+                    ->searchable()
+                    ->preload(),
+
+                Tables\Filters\SelectFilter::make('status')
+                    ->label('Order Status')
+                    ->options([
+                        'draft' => 'Draft',
+                        'ordered' => 'Ordered',
+                        'partially_received' => 'Partially Received',
+                        'received' => 'Received',
+                        'cancelled' => 'Cancelled',
+                    ]),
+
+                Tables\Filters\SelectFilter::make('payment_status')
+                    ->label('Payment Status')
+                    ->options([
+                        'unpaid' => 'Unpaid',
+                        'partial' => 'Partially Paid',
+                        'paid' => 'Paid',
+                    ]),
+            ])
             ->actions([
                 Tables\Actions\Action::make('printInvoice')
                     ->label('Invoice')
@@ -536,11 +922,15 @@ class PurchaseOrderResource extends Resource
                         (float) $record->balance_due > 0 &&
                         (auth()->user()?->can('create purchase order payments') ?? false))
                     ->form([
-                        Forms\Components\DatePicker::make('payment_date')
-                            ->label('Payment Date')
+                        Forms\Components\DateTimePicker::make('paid_at')
+                            ->label('Payment Date & Time')
                             ->default(now('Africa/Nairobi'))
+                            ->seconds(false)
+                            ->native(false)
                             ->required()
-                            ->prefixIcon('heroicon-o-calendar-days'),
+                            ->prefixIcon(
+                                'heroicon-o-calendar-days'
+                            ),
                         Forms\Components\TextInput::make('amount')
                             ->label('Amount Paid')
                             ->numeric()
@@ -562,11 +952,76 @@ class PurchaseOrderResource extends Resource
                                 'cheque' => 'Cheque',
                             ])
                             ->prefixIcon('heroicon-o-credit-card'),
-                        Forms\Components\TextInput::make('mpesa_reference')
-                            ->label('M-Pesa Reference')
-                            ->visible(fn(Get $get): bool => $get('payment_method') === 'mpesa_b2b')
-                            ->required(fn(Get $get): bool => $get('payment_method') === 'mpesa_b2b')
-                            ->prefixIcon('heroicon-o-device-phone-mobile'),
+                        Forms\Components\TextInput::make(
+                            'mpesa_receipt_number'
+                        )
+                            ->label('M-Pesa Receipt / Code')
+                            ->visible(
+                                fn (Get $get): bool =>
+                                    $get('payment_method')
+                                    === 'mpesa_b2b'
+                            )
+                            ->required(
+                                fn (Get $get): bool =>
+                                    $get('payment_method')
+                                    === 'mpesa_b2b'
+                            )
+                            ->prefixIcon(
+                                'heroicon-o-hashtag'
+                            ),
+
+                        Forms\Components\TextInput::make(
+                            'mpesa_phone'
+                        )
+                            ->label('M-Pesa Phone')
+                            ->tel()
+                            ->visible(
+                                fn (Get $get): bool =>
+                                    $get('payment_method')
+                                    === 'mpesa_b2b'
+                            )
+                            ->prefixIcon('heroicon-o-phone'),
+
+                        Forms\Components\TextInput::make(
+                            'mpesa_merchant_request_id'
+                        )
+                            ->label('STK Merchant Request ID')
+                            ->visible(
+                                fn (Get $get): bool =>
+                                    $get('payment_method')
+                                    === 'mpesa_b2b'
+                            ),
+
+                        Forms\Components\TextInput::make(
+                            'mpesa_checkout_request_id'
+                        )
+                            ->label('STK Checkout Request ID')
+                            ->visible(
+                                fn (Get $get): bool =>
+                                    $get('payment_method')
+                                    === 'mpesa_b2b'
+                            ),
+
+                        Forms\Components\TextInput::make(
+                            'mpesa_result_code'
+                        )
+                            ->label('M-Pesa Result Code')
+                            ->visible(
+                                fn (Get $get): bool =>
+                                    $get('payment_method')
+                                    === 'mpesa_b2b'
+                            ),
+
+                        Forms\Components\TextInput::make(
+                            'mpesa_result_description'
+                        )
+                            ->label('M-Pesa Result Description')
+                            ->visible(
+                                fn (Get $get): bool =>
+                                    $get('payment_method')
+                                    === 'mpesa_b2b'
+                            ),
+
                         Forms\Components\TextInput::make('bank_name')
                             ->label('Bank Name')
                             ->visible(fn(Get $get): bool => $get('payment_method') === 'bank')
@@ -587,29 +1042,33 @@ class PurchaseOrderResource extends Resource
                             ->rows(3)
                             ->columnSpanFull(),
                     ])
-                    ->action(function (PurchaseOrder $record, array $data): void {
-                        PurchaseOrderPayment::create([
-                            'purchase_order_id' => $record->id,
-                            'payment_date' => $data['payment_date'],
-                            'amount' => (float) $data['amount'],
-                            'payment_method' => $data['payment_method'],
-                            'status' => 'successful',
-                            'mpesa_reference' => $data['mpesa_reference'] ?? null,
-                            'bank_name' => $data['bank_name'] ?? null,
-                            'bank_reference' => $data['bank_reference'] ?? null,
-                            'cheque_number' => $data['cheque_number'] ?? null,
-                            'notes' => $data['notes'] ?? null,
-                        ]);
+                    ->action(
+                        function (
+                            PurchaseOrder $record,
+                            array $data
+                        ): void {
+                            $payment = app(
+                                ProcurementLifecycleService::class
+                            )->recordPayment($record, $data);
 
-                        $record->refresh();
-                        $record->syncPaymentTotals();
-
-                        Notification::make()
-                            ->title('Supplier invoice payment recorded')
-                            ->body('The payment has been linked to invoice ' . ($record->invoice_number ?: $record->purchase_order_number) . '.')
-                            ->success()
-                            ->send();
-                    }),
+                            Notification::make()
+                                ->title(
+                                    'Supplier invoice payment recorded'
+                                )
+                                ->body(
+                                    $payment->payment_number
+                                    . ' has been linked to invoice '
+                                    . (
+                                        $record->invoice_number
+                                        ?: $record
+                                            ->purchase_order_number
+                                    )
+                                    . '.'
+                                )
+                                ->success()
+                                ->send();
+                        }
+                    ),
                 Tables\Actions\Action::make('latestPaymentVoucher')
                     ->label('Payment Voucher')
                     ->icon('heroicon-o-document-arrow-down')
@@ -632,28 +1091,255 @@ class PurchaseOrderResource extends Resource
                         return route('procurement.payments.voucher', $payment);
                     })
                     ->openUrlInNewTab(),
-                Tables\Actions\Action::make('receiveStock')
-                    ->label('Receive')
-                    ->icon('heroicon-o-arrow-down-tray')
+                Tables\Actions\Action::make('createGrn')
+                    ->label('Create GRN')
+                    ->icon('heroicon-o-truck')
                     ->color('warning')
-                    ->requiresConfirmation()
-                    ->visible(fn(PurchaseOrder $record): bool =>
-                        (auth()->user()?->can('receive purchase orders') ?? false) &&
-                        $record->status !== 'received')
-                    ->action(function (PurchaseOrder $record): void {
-                        $record->receiveStock();
+                    ->visible(
+                        fn (
+                            PurchaseOrder $record
+                        ): bool =>
+                            (
+                                auth()->user()?->can(
+                                    'create goods received notes'
+                                )
+                                || auth()->user()?->can(
+                                    'receive purchase orders'
+                                )
+                                || auth()->user()?->hasAnyRole([
+                                    'Administrator',
+                                    'Admin',
+                                ])
+                            )
+                            && app(
+                                PurchaseReceivingService::class
+                            )->hasRemaining($record)
+                    )
+                    ->url(
+                        fn (
+                            PurchaseOrder $record
+                        ): string =>
+                            PurchaseOrderReceiptResource::getUrl(
+                                'create',
+                                [
+                                    'purchase_order_id' =>
+                                        $record->getKey(),
+                                ]
+                            )
+                    ),
 
-                        Notification::make()
-                            ->title('Stock received')
-                            ->body('Stock IN movements were created successfully.')
-                            ->success()
-                            ->send();
-                    }),
-                Tables\Actions\EditAction::make()
-                    ->icon('heroicon-o-pencil-square'),
-                Tables\Actions\DeleteAction::make()
+                Tables\Actions\Action::make('cancelOrder')
+                    ->label('Cancel')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('warning')
+                    ->visible(
+                        fn (
+                            PurchaseOrder $record
+                        ): bool =>
+                            $record->canBeCancelledSafely()
+                            && (
+                                auth()->user()?->can(
+                                    'cancel purchase orders'
+                                )
+                                || auth()->user()?->can(
+                                    'delete purchase orders'
+                                )
+                                || auth()->user()?->hasAnyRole([
+                                    'Administrator',
+                                    'Admin',
+                                ])
+                            )
+                    )
                     ->requiresConfirmation()
+                    ->form([
+                        Forms\Components\Textarea::make(
+                            'cancellation_reason'
+                        )
+                            ->required()
+                            ->minLength(8)
+                            ->rows(3),
+                    ])
+                    ->action(
+                        function (
+                            PurchaseOrder $record,
+                            array $data
+                        ): void {
+                            app(
+                                ProcurementLifecycleService::class
+                            )->cancelPurchaseOrder(
+                                $record,
+                                $data['cancellation_reason']
+                            );
+
+                            Notification::make()
+                                ->success()
+                                ->title('Purchase order cancelled')
+                                ->send();
+                        }
+                    ),
+
+                Tables\Actions\EditAction::make()
+                    ->icon('heroicon-o-pencil-square')
+                    ->visible(
+                        fn (
+                            PurchaseOrder $record
+                        ): bool =>
+                            static::canEdit($record)
+                    ),
+
+                Tables\Actions\DeleteAction::make()
+                    ->label('Delete Draft')
+                    ->visible(
+                        fn (
+                            PurchaseOrder $record
+                        ): bool =>
+                            static::canDelete($record)
+                    )
+                    ->requiresConfirmation()
+                    ->modalDescription(
+                        'Only draft or cancelled purchase orders '
+                        . 'without payments, GRNs, stock movements or '
+                        . 'active journals can be deleted.'
+                    )
                     ->icon('heroicon-o-trash'),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkAction::make(
+                    'cancelSelected'
+                )
+                    ->label(
+                        'Cancel Eligible Orders'
+                    )
+                    ->icon('heroicon-o-x-circle')
+                    ->color('warning')
+                    ->visible(
+                        fn (): bool =>
+                            auth()->user()?->can(
+                                'cancel purchase orders'
+                            )
+                            || auth()->user()?->can(
+                                'delete purchase orders'
+                            )
+                            || auth()->user()?->hasAnyRole([
+                                'Administrator',
+                                'Admin',
+                            ])
+                    )
+                    ->form([
+                        Forms\Components\Textarea::make(
+                            'cancellation_reason'
+                        )
+                            ->required()
+                            ->minLength(8)
+                            ->rows(3),
+                    ])
+                    ->action(
+                        function (
+                            Collection $records,
+                            array $data
+                        ): void {
+                            $cancelled = 0;
+                            $skipped = 0;
+                            $failed = 0;
+
+                            foreach ($records as $record) {
+                                if (
+                                    ! $record
+                                        ->canBeCancelledSafely()
+                                ) {
+                                    $skipped++;
+                                    continue;
+                                }
+
+                                try {
+                                    app(
+                                        ProcurementLifecycleService::class
+                                    )->cancelPurchaseOrder(
+                                        $record,
+                                        $data[
+                                            'cancellation_reason'
+                                        ]
+                                    );
+                                    $cancelled++;
+                                } catch (Throwable) {
+                                    $failed++;
+                                }
+                            }
+
+                            Notification::make()
+                                ->title(
+                                    "{$cancelled} order(s) cancelled"
+                                )
+                                ->body(
+                                    "{$skipped} were protected; "
+                                    . "{$failed} could not be cancelled."
+                                )
+                                ->color(
+                                    $failed > 0
+                                        ? 'warning'
+                                        : 'success'
+                                )
+                                ->send();
+                        }
+                    )
+                    ->deselectRecordsAfterCompletion(),
+
+                Tables\Actions\BulkAction::make(
+                    'deleteEligible'
+                )
+                    ->label(
+                        'Delete Eligible Drafts'
+                    )
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->visible(
+                        fn (): bool =>
+                            auth()->user()?->can(
+                                'delete purchase orders'
+                            )
+                            || auth()->user()?->hasAnyRole([
+                                'Administrator',
+                                'Admin',
+                            ])
+                    )
+                    ->requiresConfirmation()
+                    ->action(
+                        function (
+                            Collection $records
+                        ): void {
+                            $deleted = 0;
+                            $skipped = 0;
+
+                            foreach ($records as $record) {
+                                if (
+                                    ! app(
+                                        ProcurementLifecycleService::class
+                                    )->canDeletePurchaseOrder(
+                                        $record
+                                    )
+                                ) {
+                                    $skipped++;
+                                    continue;
+                                }
+
+                                $record->delete();
+                                $deleted++;
+                            }
+
+                            Notification::make()
+                                ->success()
+                                ->title(
+                                    "{$deleted} order(s) deleted"
+                                )
+                                ->body(
+                                    "{$skipped} paid, received or "
+                                    . 'accounting-linked order(s) were '
+                                    . 'retained.'
+                                )
+                                ->send();
+                        }
+                    )
+                    ->deselectRecordsAfterCompletion(),
             ]);
     }
 

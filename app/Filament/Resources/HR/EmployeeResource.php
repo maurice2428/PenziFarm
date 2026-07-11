@@ -353,6 +353,30 @@ class EmployeeResource extends Resource
                                         ->default(true),
                                 ]),
                             ]),
+                        Section::make('PAYE Allowable Deductions & Reliefs')
+                            ->description('Monthly documented amounts used by the Kenya PAYE calculator.')
+                            ->icon('heroicon-o-document-check')
+                            ->schema([
+                                Grid::make([
+                                    'default' => 1,
+                                    'md' => 2,
+                                    'xl' => 4,
+                                ])->schema([
+                                    TextInput::make('registered_pension_contribution')
+                                        ->label('Registered Pension Contribution')
+                                        ->numeric()->minValue(0)->default(0)->prefix('KES'),
+                                    TextInput::make('post_retirement_medical_contribution')
+                                        ->label('Post-Retirement Medical Contribution')
+                                        ->numeric()->minValue(0)->default(0)->prefix('KES'),
+                                    TextInput::make('mortgage_interest')
+                                        ->label('Owner-Occupied Mortgage Interest')
+                                        ->numeric()->minValue(0)->default(0)->prefix('KES'),
+                                    TextInput::make('insurance_relief')
+                                        ->label('Monthly Insurance Relief')
+                                        ->numeric()->minValue(0)->default(0)->prefix('KES')
+                                        ->helperText('Enter the calculated relief amount, not the premium.'),
+                                ]),
+                            ]),
                     ]),
                 Wizard\Step::make('Documents & Metadata')
                     ->icon('heroicon-o-document-text')
