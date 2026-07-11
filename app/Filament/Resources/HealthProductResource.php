@@ -9,6 +9,9 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Storage;
 
 class HealthProductResource extends Resource
@@ -26,6 +29,52 @@ class HealthProductResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-beaker';
 
     protected static ?int $navigationSort = 1;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return auth()->user()?->can('view health products') ?? false;
+    }
+
+    public static function canAccess(): bool
+    {
+        return static::shouldRegisterNavigation();
+    }
+
+    public static function canViewAny(): bool
+    {
+        return static::shouldRegisterNavigation();
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->can('create health products') ?? false;
+    }
+
+    public static function canEdit($record): bool
+    {
+        return auth()->user()?->can('edit health products') ?? false;
+    }
+
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->can('delete health products') ?? false;
+    }
+
+    public static function canRestore($record): bool
+    {
+        return auth()->user()?->can('restore health products') ?? false;
+    }
+
+    public static function canForceDelete($record): bool
+    {
+        return auth()->user()?->can('force delete health products') ?? false;
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->withoutGlobalScopes([SoftDeletingScope::class]);
+    }
 
     public static function form(Form $form): Form
     {
@@ -254,6 +303,9 @@ class HealthProductResource extends Resource
                     ->openUrlInNewTab()
                     ->toggleable(),
             ])
+            ->filters([
+                Tables\Filters\TrashedFilter::make(),
+            ])
             ->actions([
                 Tables\Actions\Action::make('openReferenceDocument')
                     ->label('Reference')
@@ -270,10 +322,89 @@ class HealthProductResource extends Resource
                 Tables\Actions\EditAction::make()
                     ->slideOver()
                     ->modalWidth('6xl')
-                    ->icon('heroicon-o-pencil-square'),
+                    ->icon('heroicon-o-pencil-square')
+                    ->visible(
+                        fn (HealthProduct $record): bool =>
+                            static::canEdit($record)
+                    ),
 
                 Tables\Actions\DeleteAction::make()
+                    ->visible(
+                        fn (HealthProduct $record): bool =>
+                            static::canDelete($record)
+                    )
                     ->requiresConfirmation(),
+
+                Tables\Actions\RestoreAction::make()
+                    ->visible(
+                        fn (HealthProduct $record): bool =>
+                            static::canRestore($record)
+                    ),
+
+                Tables\Actions\ForceDeleteAction::make()
+                    ->visible(
+                        fn (HealthProduct $record): bool =>
+                            static::canForceDelete($record)
+                    ),
+            ])
+            ->bulkActions([
+                Tables\Actions\DeleteBulkAction::make()
+                    ->visible(
+                        fn (): bool =>
+                            auth()->user()?->can('delete health products')
+                            ?? false
+                    ),
+
+                Tables\Actions\RestoreBulkAction::make()
+                    ->visible(
+                        fn (): bool =>
+                            auth()->user()?->can('restore health products')
+                            ?? false
+                    ),
+
+                Tables\Actions\ForceDeleteBulkAction::make()
+                    ->visible(
+                        fn (): bool =>
+                            auth()->user()?->can('force delete health products')
+                            ?? false
+                    ),
+
+                Tables\Actions\BulkAction::make('exportSelected')
+                    ->label('Export Selected')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('gray')
+                    ->visible(
+                        fn (): bool =>
+                            auth()->user()?->can('export health products')
+                            ?? false
+                    )
+                    ->action(function (Collection $records) {
+                        return response()->streamDownload(
+                            function () use ($records): void {
+                                $handle = fopen('php://output', 'wb');
+                                fputcsv($handle, [
+                                    'Product', 'Type', 'Species', 'Dosage',
+                                    'Unit', 'Method', 'Frequency', 'Status',
+                                ]);
+                                foreach ($records as $record) {
+                                    fputcsv($handle, [
+                                        $record->name,
+                                        $record->type_label,
+                                        $record->species,
+                                        $record->dosage_per_animal,
+                                        $record->dosage_unit,
+                                        $record->administration_method,
+                                        $record->frequency_label,
+                                        $record->status,
+                                    ]);
+                                }
+                                fclose($handle);
+                            },
+                            'health-products-' . now('Africa/Nairobi')->format('Ymd_His') . '.csv',
+                            ['Content-Type' => 'text/csv']
+                        );
+                    })
+                    ->deselectRecordsAfterCompletion(),
             ])
             ->emptyStateIcon('heroicon-o-beaker')
             ->emptyStateHeading('No health products registered')

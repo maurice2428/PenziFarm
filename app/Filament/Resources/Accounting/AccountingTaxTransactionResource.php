@@ -23,6 +23,7 @@ class AccountingTaxTransactionResource extends Resource
     protected static ?int $navigationSort = 2;
 
     public static function shouldRegisterNavigation(): bool { return auth()->user()?->can('view accounting tax transactions') ?? false; }
+    public static function canAccess(): bool { return static::shouldRegisterNavigation(); }
     public static function canViewAny(): bool { return static::shouldRegisterNavigation(); }
     public static function canCreate(): bool { return false; }
     public static function canEdit($record): bool { return auth()->user()?->can('edit accounting tax transactions') ?? false; }
@@ -69,11 +70,17 @@ class AccountingTaxTransactionResource extends Resource
             Tables\Filters\SelectFilter::make('direction')->options(['output'=>'Output Tax','input'=>'Input Tax','withheld'=>'Withheld','payable'=>'Payable','credit'=>'Credit']),
             Tables\Filters\SelectFilter::make('status')->options(['posted'=>'Posted','due'=>'Due','filed'=>'Filed','paid'=>'Paid','reversed'=>'Reversed']),
             Tables\Filters\Filter::make('due')->query(fn(Builder $q):Builder=>$q->whereNotNull('due_date')->whereDate('due_date','<=',now())->whereNotIn('status',['paid','filed','reversed'])),
-        ])->actions([Tables\Actions\EditAction::make()->label('Update Evidence')->slideOver()->modalWidth('5xl')])
+        ])->actions([
+            Tables\Actions\EditAction::make()
+                ->label('Update Evidence')
+                ->slideOver()
+                ->modalWidth('5xl')
+                ->visible(fn (AccountingTaxTransaction $record): bool => static::canEdit($record)),
+        ])
         ->bulkActions([
-            Tables\Actions\BulkAction::make('markFiled')->label('Mark Filed')->icon('heroicon-o-document-check')->color('primary')->action(fn(Collection $records)=>$records->whereNotIn('status',['reversed'])->each->update(['status'=>'filed']))->deselectRecordsAfterCompletion(),
-            Tables\Actions\BulkAction::make('markPaid')->label('Mark Paid')->icon('heroicon-o-banknotes')->color('success')->requiresConfirmation()->action(fn(Collection $records)=>$records->whereNotIn('status',['reversed'])->each->update(['status'=>'paid','paid_at'=>now()]))->deselectRecordsAfterCompletion(),
-            Tables\Actions\BulkAction::make('exportSelected')->label('Export Selected')->icon('heroicon-o-arrow-down-tray')->color('gray')->action(fn(Collection $records)=>app(AccountingBulkExportService::class)->csv($records,['Tax Number'=>'tax_number','Date'=>fn($r)=>$r->transaction_date?->format('Y-m-d'),'Tax Code'=>'tax_code','Direction'=>'direction','Party'=>'party_name','PIN'=>'party_pin','Taxable'=>'taxable_amount','Tax'=>'tax_amount','Gross'=>'gross_amount','Due'=>fn($r)=>$r->due_date?->format('Y-m-d'),'Status'=>'status','eTIMS Invoice'=>'etims_invoice_number'],'tax-register-'.now()->format('Ymd_His').'.csv')),
+            Tables\Actions\BulkAction::make('markFiled')->label('Mark Filed')->visible(fn (): bool => auth()->user()?->can('mark accounting tax transactions filed') ?? false)->icon('heroicon-o-document-check')->color('primary')->action(fn(Collection $records)=>$records->whereNotIn('status',['reversed'])->each->update(['status'=>'filed']))->deselectRecordsAfterCompletion(),
+            Tables\Actions\BulkAction::make('markPaid')->label('Mark Paid')->visible(fn (): bool => auth()->user()?->can('mark accounting tax transactions paid') ?? false)->icon('heroicon-o-banknotes')->color('success')->requiresConfirmation()->action(fn(Collection $records)=>$records->whereNotIn('status',['reversed'])->each->update(['status'=>'paid','paid_at'=>now()]))->deselectRecordsAfterCompletion(),
+            Tables\Actions\BulkAction::make('exportSelected')->label('Export Selected')->visible(fn (): bool => auth()->user()?->can('export accounting tax transactions') ?? false)->icon('heroicon-o-arrow-down-tray')->color('gray')->action(fn(Collection $records)=>app(AccountingBulkExportService::class)->csv($records,['Tax Number'=>'tax_number','Date'=>fn($r)=>$r->transaction_date?->format('Y-m-d'),'Tax Code'=>'tax_code','Direction'=>'direction','Party'=>'party_name','PIN'=>'party_pin','Taxable'=>'taxable_amount','Tax'=>'tax_amount','Gross'=>'gross_amount','Due'=>fn($r)=>$r->due_date?->format('Y-m-d'),'Status'=>'status','eTIMS Invoice'=>'etims_invoice_number'],'tax-register-'.now()->format('Ymd_His').'.csv')),
         ]);
     }
 

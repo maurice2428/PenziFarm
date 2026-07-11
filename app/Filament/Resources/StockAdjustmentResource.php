@@ -29,20 +29,34 @@ class StockAdjustmentResource extends Resource
 
     protected static ?int $navigationSort = 5;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return auth()->user()?->can('view stock adjustments') ?? false;
+    }
+
+    public static function canAccess(): bool
+    {
+        return static::shouldRegisterNavigation();
+    }
+
     public static function canViewAny(): bool
     {
-        return auth()->user()?->can('view stock adjustments')
-            || auth()->user()?->hasRole('Admin')
-            || auth()->user()?->hasRole('Administrator')
-            || false;
+        return static::shouldRegisterNavigation();
     }
 
     public static function canCreate(): bool
     {
-        return auth()->user()?->can('create stock adjustments')
-            || auth()->user()?->hasRole('Admin')
-            || auth()->user()?->hasRole('Administrator')
-            || false;
+        return auth()->user()?->can('create stock adjustments') ?? false;
+    }
+
+    public static function canEdit($record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete($record): bool
+    {
+        return false;
     }
 
     public static function form(Form $form): Form
@@ -215,7 +229,8 @@ class StockAdjustmentResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make()
-                    ->modalWidth('6xl'),
+                    ->modalWidth('6xl')
+                    ->visible(fn (): bool => auth()->user()?->can('view stock adjustments') ?? false),
             ])
             ->bulkActions([
                 Tables\Actions\BulkAction::make(
@@ -226,6 +241,7 @@ class StockAdjustmentResource extends Resource
                         'heroicon-o-arrow-down-tray'
                     )
                     ->color('gray')
+                    ->visible(fn (): bool => auth()->user()?->can('export stock adjustments') ?? false)
                     ->action(
                         function (
                             Collection $records

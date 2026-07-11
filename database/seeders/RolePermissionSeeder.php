@@ -577,6 +577,139 @@ class RolePermissionSeeder extends Seeder
             'print animal group reports',
             'print locations',
             'export locations',
+            'view products',
+            'create products',
+            'edit products',
+            'delete products',
+            'restore products',
+            'force delete products',
+            'export products',
+            'view health products',
+            'create health products',
+            'edit health products',
+            'delete health products',
+            'restore health products',
+            'force delete health products',
+            'export health products',
+
+            /*
+             * Gestation Rules
+             */
+            'view gestation rules',
+            'create gestation rules',
+            'edit gestation rules',
+            'delete gestation rules',
+            'restore gestation rules',
+            'force delete gestation rules',
+
+            /*
+             * Inventory / Stock Items
+             */
+            'view inventory',
+            'create inventory',
+            'edit inventory',
+            'delete inventory',
+            'view inventory items',
+            'create inventory items',
+            'edit inventory items',
+            'delete inventory items',
+            'restore inventory items',
+            'force delete inventory items',
+            'export inventory items',
+            'activate inventory items',
+            'deactivate inventory items',
+
+            /*
+             * Stock Movements
+             */
+            'view stock movements',
+            'create stock movements',
+            'edit stock movements',
+            'delete stock movements',
+            'restore stock movements',
+            'force delete stock movements',
+            'print stock movements',
+            'export stock movements',
+            'manage stock movements',
+
+            /*
+             * Stock Adjustments
+             */
+            'view stock adjustments',
+            'create stock adjustments',
+            'edit stock adjustments',
+            'delete stock adjustments',
+            'approve stock adjustments',
+            'reverse stock adjustments',
+
+            /*
+             * Bank and Cash Reconciliation
+             */
+            'view accounting reconciliations',
+            'create accounting reconciliations',
+            'edit accounting reconciliations',
+            'delete accounting reconciliations',
+            'restore accounting reconciliations',
+            'force delete accounting reconciliations',
+            'refresh accounting reconciliations',
+            'approve accounting reconciliations',
+            'complete accounting reconciliations',
+            'reopen accounting reconciliations',
+            'export accounting reconciliations',
+
+            /*
+             * Source Posting Audit
+             */
+            'view accounting source postings',
+            'inspect accounting source postings',
+            'retry accounting source postings',
+            'export accounting source postings',
+
+            /*
+             * Posting Failures
+             */
+            'view accounting posting failures',
+            'retry accounting posting failures',
+            'ignore accounting posting failures',
+            'archive accounting posting failures',
+            'restore accounting posting failures',
+            'export accounting posting failures',
+
+            /*
+             * Kenya Tax Compliance Dashboard
+             */
+            'view kenya tax compliance',
+            'manage kenya tax compliance',
+            'export kenya tax compliance',
+
+            /*
+             * Tax Rules
+             */
+            'view accounting tax settings',
+            'create accounting tax settings',
+            'edit accounting tax settings',
+            'delete accounting tax settings',
+            'restore accounting tax settings',
+            'force delete accounting tax settings',
+            'activate accounting tax settings',
+            'deactivate accounting tax settings',
+
+            /*
+             * Tax Register
+             */
+            'view accounting tax transactions',
+            'edit accounting tax transactions',
+            'mark accounting tax transactions filed',
+            'mark accounting tax transactions paid',
+            'reverse accounting tax transactions',
+            'export accounting tax transactions',
+
+            /*
+             * Accounting Controls
+             */
+            'run accounting auto posting',
+            'run accounting backfill',
+            'manage accounting module',
         ];
 
         foreach (array_unique($permissions) as $permission) {
@@ -610,6 +743,8 @@ class RolePermissionSeeder extends Seeder
             $admin->syncRoles(['Administrator']);
             $admin->syncPermissions($permissions);
         }
+
+        $this->call(PenziModulePermissionSeeder::class);
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }

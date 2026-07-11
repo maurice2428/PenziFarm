@@ -25,10 +25,12 @@ class AccountingPostingFailureResource extends Resource
     protected static ?int $navigationSort = 4;
 
     public static function shouldRegisterNavigation(): bool { return auth()->user()?->can('view accounting posting failures') ?? false; }
+    public static function canAccess(): bool { return static::shouldRegisterNavigation(); }
     public static function canViewAny(): bool { return static::shouldRegisterNavigation(); }
     public static function canCreate(): bool { return false; }
     public static function canEdit($record): bool { return false; }
-    public static function canDelete($record): bool { return auth()->user()?->can('ignore accounting posting failures') ?? false; }
+    public static function canDelete($record): bool { return auth()->user()?->can('archive accounting posting failures') ?? false; }
+    public static function canRestore($record): bool { return auth()->user()?->can('restore accounting posting failures') ?? false; }
     public static function getEloquentQuery(): Builder { return parent::getEloquentQuery()->withoutGlobalScopes([SoftDeletingScope::class]); }
 
     public static function form(Form $form): Form
@@ -69,14 +71,14 @@ class AccountingPostingFailureResource extends Resource
             Tables\Actions\ViewAction::make()->slideOver()->modalWidth('6xl'),
             Tables\Actions\Action::make('retry')->icon('heroicon-o-arrow-path')->color('warning')->requiresConfirmation()->visible(fn(AccountingPostingFailure $r):bool=>$r->status==='pending' && (auth()->user()?->can('retry accounting posting failures') ?? false))->action(function(AccountingPostingFailure $r):void{app(AccountingPostingRecoveryService::class)->retry($r);Notification::make()->success()->title('Posting retried successfully')->send();}),
             Tables\Actions\Action::make('ignore')->icon('heroicon-o-no-symbol')->color('gray')->visible(fn(AccountingPostingFailure $r):bool=>$r->status==='pending' && (auth()->user()?->can('ignore accounting posting failures') ?? false))->form([Forms\Components\Textarea::make('reason')->required()->rows(3)])->action(fn(AccountingPostingFailure $r,array $data)=>app(AccountingPostingRecoveryService::class)->ignore($r,$data['reason'])),
-            Tables\Actions\DeleteAction::make()->label('Archive')->visible(fn(AccountingPostingFailure $r):bool=>$r->status!=='pending'),
-            Tables\Actions\RestoreAction::make(),
+            Tables\Actions\DeleteAction::make()->label('Archive')->visible(fn(AccountingPostingFailure $r): bool => $r->status !== 'pending' && (auth()->user()?->can('archive accounting posting failures') ?? false)),
+            Tables\Actions\RestoreAction::make()->visible(fn (AccountingPostingFailure $record): bool => static::canRestore($record)),
         ])->bulkActions([
-            Tables\Actions\BulkAction::make('retrySelected')->label('Retry Selected')->icon('heroicon-o-arrow-path')->color('warning')->action(function(Collection $records):void{$done=0;$skip=0;foreach($records->where('status','pending') as $r){try{app(AccountingPostingRecoveryService::class)->retry($r);$done++;}catch(\Throwable){$skip++;}}Notification::make()->title("{$done} retried; {$skip} still failed")->color($skip?'warning':'success')->send();})->deselectRecordsAfterCompletion(),
-            Tables\Actions\BulkAction::make('ignoreSelected')->label('Ignore Selected')->icon('heroicon-o-no-symbol')->color('gray')->form([Forms\Components\Textarea::make('reason')->required()->rows(3)])->action(function(Collection $records,array $data):void{foreach($records->where('status','pending') as $r)app(AccountingPostingRecoveryService::class)->ignore($r,$data['reason']);})->deselectRecordsAfterCompletion(),
-            Tables\Actions\BulkAction::make('archiveResolved')->label('Archive Resolved')->icon('heroicon-o-archive-box')->color('danger')->action(fn(Collection $records)=>$records->whereIn('status',['resolved','ignored'])->each->delete())->deselectRecordsAfterCompletion(),
-            Tables\Actions\RestoreBulkAction::make(),
-            Tables\Actions\BulkAction::make('exportSelected')->label('Export Selected')->icon('heroicon-o-arrow-down-tray')->color('gray')->action(fn(Collection $records)=>app(AccountingBulkExportService::class)->csv($records,['Source Type'=>'source_type','Source ID'=>'source_id','Action'=>'source_action','Error'=>'error_message','Attempts'=>'attempts','Status'=>'status','Last Attempt'=>fn($r)=>$r->last_attempted_at?->format('Y-m-d H:i:s')],'posting-failures-'.now()->format('Ymd_His').'.csv')),
+            Tables\Actions\BulkAction::make('retrySelected')->label('Retry Selected')->visible(fn (): bool => auth()->user()?->can('retry accounting posting failures') ?? false)->icon('heroicon-o-arrow-path')->color('warning')->action(function(Collection $records):void{$done=0;$skip=0;foreach($records->where('status','pending') as $r){try{app(AccountingPostingRecoveryService::class)->retry($r);$done++;}catch(\Throwable){$skip++;}}Notification::make()->title("{$done} retried; {$skip} still failed")->color($skip?'warning':'success')->send();})->deselectRecordsAfterCompletion(),
+            Tables\Actions\BulkAction::make('ignoreSelected')->label('Ignore Selected')->visible(fn (): bool => auth()->user()?->can('ignore accounting posting failures') ?? false)->icon('heroicon-o-no-symbol')->color('gray')->form([Forms\Components\Textarea::make('reason')->required()->rows(3)])->action(function(Collection $records,array $data):void{foreach($records->where('status','pending') as $r)app(AccountingPostingRecoveryService::class)->ignore($r,$data['reason']);})->deselectRecordsAfterCompletion(),
+            Tables\Actions\BulkAction::make('archiveResolved')->label('Archive Resolved')->visible(fn (): bool => auth()->user()?->can('archive accounting posting failures') ?? false)->icon('heroicon-o-archive-box')->color('danger')->action(fn(Collection $records)=>$records->whereIn('status',['resolved','ignored'])->each->delete())->deselectRecordsAfterCompletion(),
+            Tables\Actions\RestoreBulkAction::make()->visible(fn (): bool => auth()->user()?->can('restore accounting posting failures') ?? false),
+            Tables\Actions\BulkAction::make('exportSelected')->label('Export Selected')->visible(fn (): bool => auth()->user()?->can('export accounting posting failures') ?? false)->icon('heroicon-o-arrow-down-tray')->color('gray')->action(fn(Collection $records)=>app(AccountingBulkExportService::class)->csv($records,['Source Type'=>'source_type','Source ID'=>'source_id','Action'=>'source_action','Error'=>'error_message','Attempts'=>'attempts','Status'=>'status','Last Attempt'=>fn($r)=>$r->last_attempted_at?->format('Y-m-d H:i:s')],'posting-failures-'.now()->format('Ymd_His').'.csv')),
         ]);
     }
 

@@ -28,6 +28,21 @@ class StockMovementResource extends Resource
 
     protected static ?int $navigationSort = 4;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return auth()->user()?->can('view stock movements') ?? false;
+    }
+
+    public static function canAccess(): bool
+    {
+        return static::shouldRegisterNavigation();
+    }
+
+    public static function canViewAny(): bool
+    {
+        return static::shouldRegisterNavigation();
+    }
+
     public static function canCreate(): bool
     {
         return false;
@@ -246,6 +261,11 @@ class StockMovementResource extends Resource
                         'heroicon-o-arrow-down-tray'
                     )
                     ->color('gray')
+                    ->visible(
+                        fn (): bool =>
+                            auth()->user()?->can('export stock movements')
+                            ?? false
+                    )
                     ->action(
                         function (
                             Collection $records

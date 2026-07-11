@@ -21,6 +21,7 @@ class AccountingTaxSettingResource extends Resource
     protected static ?int $navigationSort = 1;
 
     public static function shouldRegisterNavigation(): bool { return auth()->user()?->can('view accounting tax settings') ?? false; }
+    public static function canAccess(): bool { return static::shouldRegisterNavigation(); }
     public static function canViewAny(): bool { return static::shouldRegisterNavigation(); }
 
     public static function form(Form $form): Form
@@ -94,11 +95,14 @@ class AccountingTaxSettingResource extends Resource
                 'vat' => 'VAT', 'withholding' => 'Withholding Tax', 'withholding_vat' => 'Withholding VAT', 'corporation_tax' => 'Corporation Tax', 'turnover_tax' => 'Turnover Tax', 'paye' => 'PAYE', 'other' => 'Other',
             ]),
             Tables\Filters\TernaryFilter::make('is_active'),
-        ])->actions([Tables\Actions\EditAction::make()])
+        ])->actions([
+            Tables\Actions\EditAction::make()
+                ->visible(fn (AccountingTaxSetting $record): bool => static::canEdit($record)),
+        ])
         ->bulkActions([
-            Tables\Actions\BulkAction::make('activate')->label('Activate Selected')->color('success')->icon('heroicon-o-play')->action(fn (Collection $records) => $records->each->update(['is_active' => true]))->deselectRecordsAfterCompletion(),
-            Tables\Actions\BulkAction::make('deactivate')->label('Deactivate Selected')->color('warning')->icon('heroicon-o-pause')->action(fn (Collection $records) => $records->each->update(['is_active' => false]))->deselectRecordsAfterCompletion(),
-            Tables\Actions\BulkAction::make('exportSelected')->label('Export Selected')->icon('heroicon-o-arrow-down-tray')->color('gray')->action(fn (Collection $records) => app(AccountingBulkExportService::class)->csv($records, [
+            Tables\Actions\BulkAction::make('activate')->label('Activate Selected')->visible(fn (): bool => auth()->user()?->can('activate accounting tax settings') ?? false)->color('success')->icon('heroicon-o-play')->action(fn (Collection $records) => $records->each->update(['is_active' => true]))->deselectRecordsAfterCompletion(),
+            Tables\Actions\BulkAction::make('deactivate')->label('Deactivate Selected')->visible(fn (): bool => auth()->user()?->can('deactivate accounting tax settings') ?? false)->color('warning')->icon('heroicon-o-pause')->action(fn (Collection $records) => $records->each->update(['is_active' => false]))->deselectRecordsAfterCompletion(),
+            Tables\Actions\BulkAction::make('exportSelected')->label('Export Selected')->visible(fn (): bool => auth()->user()?->can('export accounting tax settings') ?? false)->icon('heroicon-o-arrow-down-tray')->color('gray')->action(fn (Collection $records) => app(AccountingBulkExportService::class)->csv($records, [
                 'Code' => 'code', 'Name' => 'name', 'Type' => 'type', 'Scope' => 'tax_scope', 'Rate' => 'rate', 'Resident Rate' => 'resident_rate', 'Nonresident Rate' => 'non_resident_rate', 'Effective From' => fn ($r) => $r->effective_from?->format('Y-m-d'), 'Effective To' => fn ($r) => $r->effective_to?->format('Y-m-d'), 'Active' => 'is_active',
             ], 'tax-rules-' . now()->format('Ymd_His') . '.csv')),
         ]);

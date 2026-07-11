@@ -26,17 +26,46 @@ class InventoryItemResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return auth()->user()?->can('view inventory items') ?? false;
+    }
+
+    public static function canAccess(): bool
+    {
+        return static::shouldRegisterNavigation();
+    }
+
+    public static function canViewAny(): bool
+    {
+        return static::shouldRegisterNavigation();
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->can('create inventory items') ?? false;
+    }
+
+    public static function canEdit($record): bool
+    {
+        return auth()->user()?->can('edit inventory items') ?? false;
+    }
+
     public static function canDelete($record): bool
     {
-        return (
-            auth()->user()?->can(
-                'delete inventory items'
-            )
-            || auth()->user()?->hasAnyRole([
-                'Administrator',
-                'Admin',
-            ])
-        ) && $record->canBeDeletedSafely();
+        return (auth()->user()?->can('delete inventory items') ?? false)
+            && $record->canBeDeletedSafely();
+    }
+
+    public static function canRestore($record): bool
+    {
+        return auth()->user()?->can('restore inventory items') ?? false;
+    }
+
+    public static function canForceDelete($record): bool
+    {
+        return (auth()->user()?->can('force delete inventory items') ?? false)
+            && $record->canBeDeletedSafely();
     }
 
     public static function procurementCreateSchema(): array
@@ -280,7 +309,8 @@ class InventoryItemResource extends Resource
                 Tables\Actions\EditAction::make()
                     ->slideOver()
                     ->modalWidth('6xl')
-                    ->icon('heroicon-o-pencil-square'),
+                    ->icon('heroicon-o-pencil-square')
+                    ->visible(fn (InventoryItem $record): bool => static::canEdit($record)),
 
                 Tables\Actions\Action::make('toggleActive')
                     ->label(
@@ -301,6 +331,12 @@ class InventoryItemResource extends Resource
                                 ? 'warning'
                                 : 'success'
                     )
+                    ->visible(
+                        fn (InventoryItem $record): bool =>
+                            $record->is_active
+                                ? (auth()->user()?->can('deactivate inventory items') ?? false)
+                                : (auth()->user()?->can('activate inventory items') ?? false)
+                    )
                     ->action(
                         fn (InventoryItem $record) =>
                             $record->update([
@@ -317,7 +353,11 @@ class InventoryItemResource extends Resource
                     )
                     ->requiresConfirmation(),
 
-                Tables\Actions\RestoreAction::make(),
+                Tables\Actions\RestoreAction::make()
+                    ->visible(fn (InventoryItem $record): bool => static::canRestore($record)),
+
+                Tables\Actions\ForceDeleteAction::make()
+                    ->visible(fn (InventoryItem $record): bool => static::canForceDelete($record)),
             ])
             ->bulkActions([
                 Tables\Actions\BulkAction::make(
@@ -328,16 +368,8 @@ class InventoryItemResource extends Resource
                     ->color('warning')
                     ->visible(
                         fn (): bool =>
-                            auth()->user()?->can(
-                                'deactivate inventory items'
-                            )
-                            || auth()->user()?->can(
-                                'edit inventory items'
-                            )
-                            || auth()->user()?->hasAnyRole([
-                                'Administrator',
-                                'Admin',
-                            ])
+                            auth()->user()?->can('deactivate inventory items')
+                            ?? false
                     )
                     ->action(
                         function (Collection $records): void {
@@ -366,16 +398,8 @@ class InventoryItemResource extends Resource
                     ->color('success')
                     ->visible(
                         fn (): bool =>
-                            auth()->user()?->can(
-                                'deactivate inventory items'
-                            )
-                            || auth()->user()?->can(
-                                'edit inventory items'
-                            )
-                            || auth()->user()?->hasAnyRole([
-                                'Administrator',
-                                'Admin',
-                            ])
+                            auth()->user()?->can('activate inventory items')
+                            ?? false
                     )
                     ->action(
                         function (Collection $records): void {
@@ -422,13 +446,8 @@ class InventoryItemResource extends Resource
                     ->color('danger')
                     ->visible(
                         fn (): bool =>
-                            auth()->user()?->can(
-                                'delete inventory items'
-                            )
-                            || auth()->user()?->hasAnyRole([
-                                'Administrator',
-                                'Admin',
-                            ])
+                            auth()->user()?->can('delete inventory items')
+                            ?? false
                     )
                     ->requiresConfirmation()
                     ->action(
@@ -463,7 +482,37 @@ class InventoryItemResource extends Resource
                     )
                     ->deselectRecordsAfterCompletion(),
 
-                Tables\Actions\RestoreBulkAction::make(),
+                Tables\Actions\BulkAction::make('exportSelected')
+                    ->label('Export Selected')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('gray')
+                    ->visible(fn (): bool => auth()->user()?->can('export inventory items') ?? false)
+                    ->action(function (Collection $records) {
+                        return response()->streamDownload(
+                            function () use ($records): void {
+                                $handle = fopen('php://output', 'wb');
+                                fputcsv($handle, ['Name', 'Category', 'Unit', 'Current Stock', 'Unit Cost', 'Stock Value', 'Active']);
+                                foreach ($records as $record) {
+                                    fputcsv($handle, [
+                                        $record->name,
+                                        $record->category_label,
+                                        $record->unit,
+                                        $record->current_stock,
+                                        $record->unit_cost,
+                                        $record->stock_value,
+                                        $record->is_active ? 'Yes' : 'No',
+                                    ]);
+                                }
+                                fclose($handle);
+                            },
+                            'inventory-items-' . now('Africa/Nairobi')->format('Ymd_His') . '.csv',
+                            ['Content-Type' => 'text/csv']
+                        );
+                    })
+                    ->deselectRecordsAfterCompletion(),
+
+                Tables\Actions\RestoreBulkAction::make()
+                    ->visible(fn (): bool => auth()->user()?->can('restore inventory items') ?? false),
             ]);
     }
 

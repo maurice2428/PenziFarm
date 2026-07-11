@@ -20,7 +20,8 @@ class UserResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-users';
 
     protected static ?string $navigationGroup = 'Administration';
-     protected static ?string $navigationLabel = 'User(s)';
+
+    protected static ?string $navigationLabel = 'User(s)';
 
     protected static ?string $modelLabel = 'User(s)';
 
@@ -68,6 +69,24 @@ class UserResource extends Resource
         return auth()->user()?->can('delete users') ?? false;
     }
 
+    /* public static function permissionTabStateNames(): array
+     {
+         return [
+             'administration',
+             'livestock',
+             'veterinary',
+             'breeding_weights',
+             'sales',
+             'human_resource',
+             'payroll',
+             'inventory_reports',
+             'asset_valuation_aging',
+             'crop_farming',
+             'system_audit',
+             'projects_works',
+             'accounting_finance',
+         ];
+     }*/
     public static function permissionTabStateNames(): array
     {
         return [
@@ -84,6 +103,8 @@ class UserResource extends Resource
             'system_audit',
             'projects_works',
             'accounting_finance',
+            'accounting_controls_kenya_tax',
+            'data_center',
         ];
     }
 
@@ -229,6 +250,14 @@ class UserResource extends Resource
                         'create veterinary clinics',
                         'edit veterinary clinics',
                         'delete veterinary clinics',
+                        // Animal Health Products
+                        'view health products',
+                        'create health products',
+                        'edit health products',
+                        'delete health products',
+                        'restore health products',
+                        'force delete health products',
+                        'export health products',
                     ]),
                     self::permissionTab('Breeding & Weights', 'heroicon-o-scale', [
                         'delete breeding records',
@@ -249,6 +278,8 @@ class UserResource extends Resource
                         'create gestation rules',
                         'edit gestation rules',
                         'delete gestation rules',
+                        'restore gestation rules',
+                        'force delete gestation rules',
                     ]),
                     self::permissionTab('Sales', 'heroicon-o-banknotes', [
                         'view procurement dashboard',
@@ -374,63 +405,76 @@ class UserResource extends Resource
                         'export salary advances',
                     ]),
                     self::permissionTab('Inventory & Reports', 'heroicon-o-chart-bar', [
+                        // Inventory dashboard and general reports
                         'view inventory',
                         'create inventory',
                         'edit inventory',
                         'delete inventory',
-                        'manage stock movements',
                         'view reports',
                         'export reports',
                         'print reports',
+
+                        // Stock Items
                         'view inventory items',
                         'create inventory items',
                         'edit inventory items',
                         'delete inventory items',
+                        'restore inventory items',
+                        'force delete inventory items',
+                        'export inventory items',
+                        'activate inventory items',
+                        'deactivate inventory items',
+
+                        // Stock Movements are system-generated and immutable
                         'view stock movements',
-                        'create stock movements',
-                        'edit stock movements',
-                        'delete stock movements',
+                        'print stock movements',
+                        'export stock movements',
+                        'manage stock movements',
+
+                        // Stock Adjustments
+                        'view stock adjustments',
+                        'create stock adjustments',
+                        'export stock adjustments',
+
                         // Suppliers
                         'view suppliers',
                         'create suppliers',
                         'edit suppliers',
                         'delete suppliers',
-                        // Health Products
-                        'view health products',
-                        'create health products',
-                        'edit health products',
-                        'delete health products',
-                        // Inventory Items
-                        'view inventory items',
-                        'create inventory items',
-                        'edit inventory items',
-                        'delete inventory items',
-                        // Purchase Orders
+                        'restore suppliers',
+                        'force delete suppliers',
+                        'export suppliers',
+                        'activate suppliers',
+                        'deactivate suppliers',
+
+                        // Procurement
                         'view purchase orders',
                         'create purchase orders',
                         'edit purchase orders',
                         'delete purchase orders',
+                        'approve purchase orders',
+                        'cancel purchase orders',
                         'receive purchase orders',
-                        // Stock Movements
-                        'view stock movements',
-                        'create stock movements',
-                        'edit stock movements',
-                        'delete stock movements',
-                        // Health Administrations
+                        'print purchase orders',
+                        'export purchase orders',
+                        'view purchase order payments',
+                        'create purchase order payments',
+                        'edit purchase order payments',
+                        'delete purchase order payments',
+                        'print purchase order payments',
+                        'export purchase order payments',
+                        'view goods received notes',
+                        'create goods received notes',
+                        'print goods received notes',
+
+                        // Health and feeding stock use
                         'view health administrations',
                         'create health administrations',
                         'edit health administrations',
                         'delete health administrations',
-                        'view goods received notes',
-                        'create goods received notes',
-                        'print goods received notes',
                         'view animal feedings',
                         'create animal feedings',
                         'print animal feedings',
-                        'view stock adjustments',
-                        'create stock adjustments',
-                        'view stock movements',
-                        'print stock movements',
                     ]),
                     self::permissionTab('Asset Valuation & Aging', 'heroicon-o-banknotes', [
                         'view assets',
@@ -614,24 +658,58 @@ class UserResource extends Resource
                         'restore accounting opening balances',
                         'force delete accounting opening balances',
                         'post accounting opening balances',
-                        'view accounting tax settings',
-                        'create accounting tax settings',
-                        'edit accounting tax settings',
-                        'delete accounting tax settings',
-                        'restore accounting tax settings',
-                        'force delete accounting tax settings',
-                        'view accounting reconciliations',
-                        'create accounting reconciliations',
-                        'edit accounting reconciliations',
-                        'delete accounting reconciliations',
-                        'restore accounting reconciliations',
-                        'force delete accounting reconciliations',
-                        'approve accounting reconciliations',
-                        'complete accounting reconciliations',
-                        'run accounting auto posting',
-                        'run accounting backfill',
-                        'manage accounting module',
                     ]),
+                    self::permissionTab(
+                        'Accounting Controls & Kenya Tax',
+                        'heroicon-o-shield-check',
+                        [
+                            // Bank and Cash Reconciliations
+                            'view accounting reconciliations',
+                            'create accounting reconciliations',
+                            'edit accounting reconciliations',
+                            'refresh accounting reconciliations',
+                            'approve accounting reconciliations',
+                            'complete accounting reconciliations',
+                            'reopen accounting reconciliations',
+                            'export accounting reconciliations',
+
+                            // Source Posting Audit
+                            'view accounting source postings',
+                            'inspect accounting source postings',
+                            'export accounting source postings',
+
+                            // Posting Failures
+                            'view accounting posting failures',
+                            'retry accounting posting failures',
+                            'ignore accounting posting failures',
+                            'archive accounting posting failures',
+                            'restore accounting posting failures',
+                            'export accounting posting failures',
+
+                            // Kenya Tax Dashboard
+                            'view kenya tax compliance',
+
+                            // Tax Rules
+                            'view accounting tax settings',
+                            'create accounting tax settings',
+                            'edit accounting tax settings',
+                            'activate accounting tax settings',
+                            'deactivate accounting tax settings',
+                            'export accounting tax settings',
+
+                            // Tax Register
+                            'view accounting tax transactions',
+                            'edit accounting tax transactions',
+                            'mark accounting tax transactions filed',
+                            'mark accounting tax transactions paid',
+                            'export accounting tax transactions',
+
+                            // Restricted accounting maintenance
+                            'run accounting auto posting',
+                            'run accounting backfill',
+                            'manage accounting module',
+                        ]
+                    ),
                     self::permissionTab('Data Center', 'heroicon-o-server-stack', [
                         'view data center',
                         'run database backups',
@@ -670,6 +748,11 @@ class UserResource extends Resource
 
         return Forms\Components\Tabs\Tab::make($label)
             ->icon($icon)
+            ->visible(
+                fn (): bool =>
+                    auth()->user()?->can('assign permissions')
+                    ?? false
+            )
             ->schema([
                 Forms\Components\CheckboxList::make($stateName)
                     ->label($label . ' Permissions')
@@ -707,6 +790,10 @@ class UserResource extends Resource
 
     public static function syncPermissions(User $user, array $data): void
     {
+        if (! (auth()->user()?->can('assign permissions') ?? false)) {
+            return;
+        }
+
         $permissionIds = collect(static::permissionTabStateNames())
             ->flatMap(fn(string $field) => $data[$field] ?? [])
             ->filter()
