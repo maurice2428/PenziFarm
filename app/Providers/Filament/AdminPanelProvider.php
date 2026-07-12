@@ -9,11 +9,10 @@ use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Navigation\MenuItem;
-use Filament\Support\Colors\Color;
-use Filament\Support\Facades\FilamentView;
-use Filament\View\PanelsRenderHook;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -21,18 +20,24 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Joaopaulolndev\FilamentEditProfile\Pages\EditProfilePage;
 use Joaopaulolndev\FilamentEditProfile\FilamentEditProfilePlugin;
+use Joaopaulolndev\FilamentEditProfile\Pages\EditProfilePage;
 
 class AdminPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
-        $brandName = setting('farm.name', 'Lelekwe Farms');
+        $brandName = setting(
+            'farm.name',
+            setting('company.name', 'Penzi Farm')
+        );
+
         $logo = setting('branding.logo_light');
         $logoDark = setting('branding.logo_dark');
         $favicon = setting('branding.favicon');
-        $primary = trim(setting('theme.primary', '#24db4b'));
+        $primary = trim(
+            setting('theme.primary', '#24db4b')
+        );
 
         return $panel
             ->default()
@@ -41,6 +46,13 @@ class AdminPanelProvider extends PanelProvider
             ->login(Login::class)
             ->sidebarCollapsibleOnDesktop()
             ->databaseNotifications()
+
+            /*
+             * The custom Universal Search replaces Filament's native
+             * Resource-only global search, preventing duplicate inputs.
+             */
+            ->globalSearch(false)
+
             ->navigationGroups([
                 'Livestock',
                 'Animal Health',
@@ -67,84 +79,146 @@ class AdminPanelProvider extends PanelProvider
                 'System Settings',
                 'Account',
             ])
+
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
                 function (): HtmlString {
-                    /*
-                     * Applies to all pages below /admin/...
-                     *
-                     * Examples covered:
-                     * /admin/accounting/accounting-fiscal-years
-                     * /admin/accounting/accounting-fiscal-years/create
-                     * /admin/accounting/accounting-journal-entries
-                     * /admin/crop-farming/crop-catalog/create
-                     * /admin/projects/works
-                     * /admin/sales/customers
-                     * /admin/human-resource/employees
-                     *
-                     * The main dashboard at /admin remains unchanged.
-                     */
                     $hideResourcePageHeadings = request()->is('admin/*')
-                        ? '
-                <style>
-                    /*
-                     * Keep breadcrumbs, actions, forms, tables and page logic.
-                     * Hide only the large duplicated page title.
-                     */
-                    .fi-main .fi-header .fi-header-heading {
-                        display: none !important;
-                    }
+                        ? <<<'HTML'
+                            <style>
+                                /*
+                                 * Keep breadcrumbs, actions, forms, tables and
+                                 * page logic. Hide only the duplicated title.
+                                 */
+                                .fi-main .fi-header .fi-header-heading {
+                                    display: none !important;
+                                }
 
-                    /*
-                     * Reduce the space left after the heading is hidden.
-                     */
-                    .fi-main .fi-header {
-                        gap: 0.25rem !important;
-                    }
-                </style>
-            '
+                                .fi-main .fi-header {
+                                    gap: 0.25rem !important;
+                                }
+                            </style>
+                        HTML
                         : '';
 
-                    return new HtmlString('
-            <link
-                rel="stylesheet"
-                href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-            />
+                    return new HtmlString(
+                        <<<'HTML'
+                            <link
+                                rel="stylesheet"
+                                href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+                            />
 
-            <style>
-                .leaflet-container {
-                    width: 100%;
-                    min-height: 300px;
-                    z-index: 1;
-                }
+                            <style>
+                                .leaflet-container {
+                                    width: 100%;
+                                    min-height: 300px;
+                                    z-index: 1;
+                                }
 
-                .leaflet-control-container {
-                    z-index: 10;
-                }
-            </style>
+                                .leaflet-control-container {
+                                    z-index: 10;
+                                }
 
-            ' . $hideResourcePageHeadings);
+                                /*
+                                 * Keep Universal Search compact so the
+                                 * greeting, notifications and user menu remain
+                                 * correctly aligned. The result panel itself
+                                 * is fixed to the viewport, so it is never
+                                 * clipped by the topbar.
+                                 */
+                                .fi-topbar,
+                                .fi-topbar nav,
+                                .fi-topbar-start,
+                                .fi-topbar-end {
+                                    overflow: visible !important;
+                                }
+
+                                .fi-topbar-start {
+                                    min-width: 0 !important;
+                                    flex: 0 1 auto !important;
+                                }
+
+                                .fi-topbar-end {
+                                    flex: 0 0 auto !important;
+                                    margin-inline-start: auto !important;
+                                }
+
+                                .penzi-global-search-hook {
+                                    width: min(29rem, 38vw);
+                                    min-width: 17rem;
+                                    margin-inline: 0.5rem;
+                                }
+
+                                @media (max-width: 1280px) {
+                                    .penzi-global-search-hook {
+                                        width: min(24rem, 32vw);
+                                        min-width: 15rem;
+                                    }
+                                }
+
+                                @media (max-width: 1024px) {
+                                    .penzi-global-search-hook {
+                                        width: 18rem;
+                                        min-width: 13rem;
+                                        margin-inline: 0.25rem;
+                                    }
+                                }
+
+                                @media (max-width: 768px) {
+                                    .penzi-global-search-hook {
+                                        width: 11rem;
+                                        min-width: 9rem;
+                                    }
+                                }
+
+                                @media (max-width: 520px) {
+                                    .penzi-global-search-hook {
+                                        width: 9.5rem;
+                                        min-width: 8.5rem;
+                                    }
+                                }
+                            </style>
+                        HTML
+                        . $hideResourcePageHeadings
+                    );
                 }
             )
+
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn(): HtmlString => new HtmlString('
-                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                ')
+                fn (): HtmlString => new HtmlString(
+                    <<<'HTML'
+                        <script
+                            src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+                        ></script>
+                    HTML
+                )
             )
+
             ->brandName($brandName)
-            ->brandLogo($logo ? asset('storage/' . $logo) : asset('images/logo.png'))
+            ->brandLogo(
+                $logo
+                    ? asset('storage/' . $logo)
+                    : asset('images/logo.png')
+            )
             ->darkModeBrandLogo(
                 $logoDark
                     ? asset('storage/' . $logoDark)
                     : asset('images/logo-dark.png')
             )
             ->brandLogoHeight('60px')
-            ->favicon($favicon ? asset('storage/' . $favicon) : asset('favicon.ico'))
+            ->favicon(
+                $favicon
+                    ? asset('storage/' . $favicon)
+                    : asset('favicon.ico')
+            )
             ->colors([
                 'primary' => Color::hex($primary),
             ])
-            ->viteTheme('resources/css/filament/admin/theme.css')
+            ->viteTheme(
+                'resources/css/filament/admin/theme.css'
+            )
+
             ->plugins([
                 FilamentEditProfilePlugin::make()
                     ->slug('my-profile')
@@ -158,40 +232,55 @@ class AdminPanelProvider extends PanelProvider
                     ->shouldShowBrowserSessionsForm()
                     ->shouldShowDeleteAccountForm(false),
             ])
+
             ->userMenuItems([
                 'profile' => MenuItem::make()
                     ->label('My Profile')
-                    ->url(fn(): string => EditProfilePage::getUrl())
+                    ->url(
+                        fn (): string =>
+                            EditProfilePage::getUrl()
+                    )
                     ->icon('heroicon-m-user-circle'),
             ])
+
+            /*
+             * Universal Search.
+             */
             ->renderHook(
                 PanelsRenderHook::TOPBAR_START,
-                fn(): string => view('filament.admin.partials.topbar-search')->render()
+                fn (): string => view(
+                    'filament.admin.partials.topbar-search'
+                )->render()
             )
+
             ->renderHook(
                 PanelsRenderHook::TOPBAR_END,
-                fn(): string => view('filament.admin.partials.topbar-user-greeting')->render()
+                fn (): string => view(
+                    'filament.admin.partials.topbar-user-greeting'
+                )->render()
             )
+
             ->discoverResources(
                 in: app_path('Filament/Resources'),
-                for: 'App\Filament\Resources'
+                for: 'App\\Filament\\Resources'
             )
             ->discoverPages(
                 in: app_path('Filament/Pages'),
-                for: 'App\Filament\Pages'
+                for: 'App\\Filament\\Pages'
             )
             ->discoverClusters(
                 in: app_path('Filament/Clusters'),
-                for: 'App\Filament\Clusters'
+                for: 'App\\Filament\\Clusters'
             )
             ->pages([
                 Dashboard::class,
             ])
             ->discoverWidgets(
                 in: app_path('Filament/Widgets'),
-                for: 'App\Filament\Widgets'
+                for: 'App\\Filament\\Widgets'
             )
             ->widgets([])
+
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -203,6 +292,7 @@ class AdminPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+
             ->authMiddleware([
                 Authenticate::class,
                 \App\Http\Middleware\AuditRequestTracker::class,

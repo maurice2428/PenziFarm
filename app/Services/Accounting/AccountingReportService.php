@@ -5,6 +5,7 @@ namespace App\Services\Accounting;
 use App\Models\Accounting\AccountingAccount;
 use App\Models\Accounting\AccountingAccountMapping;
 use App\Models\Accounting\AccountingJournalEntryLine;
+use App\Models\Accounting\AccountingTaxTransaction;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -456,6 +457,275 @@ class AccountingReportService
             'movements' => $lines->count(),
             'lines' => $lines,
         ];
+    }
+
+
+    /**
+     * Return tax transactions grouped for the Kenya Tax Compliance dashboard.
+     *
+     * The Blade view expects a Collection whose rows expose:
+     * tax_code, direction, transaction_count, taxable_amount,
+     * tax_amount and gross_amount.
+     */
+    public function taxSummary(
+        ?string $from = null,
+        ?string $to = null
+    ): Collection {
+        $fromDate = $from
+            ? Carbon::parse($from)->toDateString()
+            : now('Africa/Nairobi')
+                ->startOfYear()
+                ->toDateString();
+
+        $toDate = $to
+            ? Carbon::parse($to)->toDateString()
+            : now('Africa/Nairobi')->toDateString();
+
+        $model = new AccountingTaxTransaction();
+        $table = $model->getTable();
+
+        if (! Schema::hasTable($table)) {
+            return collect();
+        }
+
+        $columns = Schema::getColumnListing($table);
+
+        $firstExistingColumn = static function (
+            array $candidates
+        ) use ($columns): ?string {
+            foreach ($candidates as $candidate) {
+                if (in_array($candidate, $columns, true)) {
+                    return $candidate;
+                }
+            }
+
+            return null;
+        };
+
+        $dateColumn = $firstExistingColumn([
+            'transaction_date',
+            'tax_date',
+            'reporting_date',
+            'period_date',
+            'date',
+            'created_at',
+        ]);
+
+        $taxCodeColumn = $firstExistingColumn([
+            'tax_code',
+            'code',
+            'tax_type',
+            'type',
+            'category',
+        ]);
+
+        $directionColumn = $firstExistingColumn([
+            'direction',
+            'tax_direction',
+            'entry_type',
+        ]);
+
+        $taxableAmountColumn = $firstExistingColumn([
+            'taxable_amount',
+            'net_amount',
+            'base_amount',
+            'amount_before_tax',
+        ]);
+
+        $taxAmountColumn = $firstExistingColumn([
+            'tax_amount',
+            'amount',
+            'tax_value',
+        ]);
+
+        $grossAmountColumn = $firstExistingColumn([
+            'gross_amount',
+            'total_amount',
+            'amount_inclusive_tax',
+        ]);
+
+        $statusColumn = $firstExistingColumn([
+            'status',
+            'filing_status',
+            'payment_status',
+        ]);
+
+        if (! $taxAmountColumn) {
+            return collect();
+        }
+
+        $query = AccountingTaxTransaction::query();
+
+        if ($dateColumn) {
+            $query
+                ->whereDate(
+                    $dateColumn,
+                    '>=',
+                    $fromDate
+                )
+                ->whereDate(
+                    $dateColumn,
+                    '<=',
+                    $toDate
+                );
+        }
+
+        if ($statusColumn) {
+            $query->whereNotIn(
+                $statusColumn,
+                [
+                    'reversed',
+                    'cancelled',
+                    'canceled',
+                    'void',
+                    'voided',
+                ]
+            );
+        }
+
+        $transactions = $query->get();
+
+        return $transactions
+            ->groupBy(
+                function (
+                    AccountingTaxTransaction $transaction
+                ) use (
+                    $taxCodeColumn,
+                    $directionColumn
+                ): string {
+                    $taxCode = strtoupper(
+                        trim(
+                            (string) (
+                                $taxCodeColumn
+                                    ? data_get(
+                                        $transaction,
+                                        $taxCodeColumn
+                                    )
+                                    : 'UNSPECIFIED'
+                            )
+                        )
+                    );
+
+                    if ($taxCode === '') {
+                        $taxCode = 'UNSPECIFIED';
+                    }
+
+                    $direction = strtolower(
+                        trim(
+                            (string) (
+                                $directionColumn
+                                    ? data_get(
+                                        $transaction,
+                                        $directionColumn
+                                    )
+                                    : 'output'
+                            )
+                        )
+                    );
+
+                    if ($direction === '') {
+                        $direction = 'output';
+                    }
+
+                    return $taxCode . '|' . $direction;
+                }
+            )
+            ->map(
+                function (
+                    Collection $group,
+                    string $groupKey
+                ) use (
+                    $taxableAmountColumn,
+                    $taxAmountColumn,
+                    $grossAmountColumn
+                ): object {
+                    [$taxCode, $direction] = array_pad(
+                        explode('|', $groupKey, 2),
+                        2,
+                        'output'
+                    );
+
+                    $taxableAmount = $taxableAmountColumn
+                        ? (float) $group->sum(
+                            fn (
+                                AccountingTaxTransaction $transaction
+                            ): float => (float) data_get(
+                                $transaction,
+                                $taxableAmountColumn,
+                                0
+                            )
+                        )
+                        : 0.0;
+
+                    $taxAmount = (float) $group->sum(
+                        fn (
+                            AccountingTaxTransaction $transaction
+                        ): float => (float) data_get(
+                            $transaction,
+                            $taxAmountColumn,
+                            0
+                        )
+                    );
+
+                    $grossAmount = $grossAmountColumn
+                        ? (float) $group->sum(
+                            fn (
+                                AccountingTaxTransaction $transaction
+                            ): float => (float) data_get(
+                                $transaction,
+                                $grossAmountColumn,
+                                0
+                            )
+                        )
+                        : 0.0;
+
+                    /*
+                     * Derive missing totals without changing stored records.
+                     */
+                    if (
+                        $taxableAmount === 0.0
+                        && $grossAmount !== 0.0
+                    ) {
+                        $taxableAmount = max(
+                            $grossAmount - $taxAmount,
+                            0
+                        );
+                    }
+
+                    if ($grossAmount === 0.0) {
+                        $grossAmount =
+                            $taxableAmount + $taxAmount;
+                    }
+
+                    return (object) [
+                        'tax_code' => $taxCode,
+                        'direction' => $direction,
+
+                        'transaction_count' =>
+                            $group->count(),
+
+                        'taxable_amount' => round(
+                            $taxableAmount,
+                            2
+                        ),
+
+                        'tax_amount' => round(
+                            $taxAmount,
+                            2
+                        ),
+
+                        'gross_amount' => round(
+                            $grossAmount,
+                            2
+                        ),
+                    ];
+                }
+            )
+            ->sortBy([
+                ['tax_code', 'asc'],
+                ['direction', 'asc'],
+            ])
+            ->values();
     }
 
     private function cashEquivalentAccountIds(): Collection

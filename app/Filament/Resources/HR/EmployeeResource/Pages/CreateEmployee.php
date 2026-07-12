@@ -10,27 +10,18 @@ class CreateEmployee extends CreateRecord
     protected static string $resource = EmployeeResource::class;
 
     protected function mutateFormDataBeforeCreate(array $data): array
-{
-    // Get last employee number
-    $lastEmployee = \App\Models\HR\Employee::orderByDesc('id')->first();
+    {
+        // Employee number generation belongs to the Employee model/service.
+        // Do not hard-code or regenerate the number on this page.
+        $data['created_by'] = auth()->id();
+        $data['updated_by'] = auth()->id();
+        $data['is_active'] = ($data['status'] ?? 'active') === 'active';
 
-    $prefix = 'LLKSTF';
-    $nextNumber = 1;
-
-    if ($lastEmployee && $lastEmployee->employee_number) {
-        // Extract numeric part
-        $lastNumber = (int) str_replace($prefix, '', $lastEmployee->employee_number);
-        $nextNumber = $lastNumber + 1;
+        return $data;
     }
 
-    // Format with leading zeros
-    $data['employee_number'] = $prefix . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
-
-    // Existing logic
-    $data['created_by'] = auth()->id();
-    $data['updated_by'] = auth()->id();
-    $data['is_active'] = ($data['status'] ?? null) === 'active';
-
-    return $data;
-}
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('view', ['record' => $this->record]);
+    }
 }

@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\HR\EmployeeResource\Pages;
 
 use App\Filament\Resources\HR\EmployeeResource;
-use Filament\Notifications\Notification;
+use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 
 class EditEmployee extends EditRecord
@@ -18,10 +18,15 @@ class EditEmployee extends EditRecord
         return $data;
     }
 
-    protected function getSavedNotification(): ?Notification
+    protected function getHeaderActions(): array
     {
-        return Notification::make()
-            ->success()
-            ->title('Employee updated successfully');
+        return [
+            Actions\ViewAction::make(),
+        ];
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('view', ['record' => $this->record]);
     }
 }
