@@ -3,6 +3,7 @@
 namespace App\Filament\Imports;
 
 use App\Models\HR\Employee;
+use Carbon\CarbonImmutable;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -45,6 +46,7 @@ class EmployeeImporter extends Importer
 
             ImportColumn::make('id_passport_number')
                 ->label('ID / Passport Number')
+                ->validationAttribute('ID / passport number')
                 ->guess([
                     'id_passport_number',
                     'id passport number',
@@ -55,6 +57,7 @@ class EmployeeImporter extends Importer
                     'passport number',
                 ])
                 ->exampleHeader('id_passport_number')
+                ->castStateUsing(fn (mixed $state): ?string => self::normalizeIdentifier($state))
                 ->requiredMappingForNewRecordsOnly()
                 ->rules(['required', 'string', 'max:50'])
                 ->example('31000001'),
@@ -79,11 +82,14 @@ class EmployeeImporter extends Importer
                 ->label('Phone')
                 ->guess(['phone', 'phone_number', 'phone number', 'mobile', 'mobile number'])
                 ->exampleHeader('phone')
+                ->castStateUsing(fn (mixed $state): ?string => self::normalizeKenyanPhone($state))
                 ->requiredMappingForNewRecordsOnly()
                 ->rules(['required', 'string', 'max:20'])
+                ->helperText('Accepts 07XXXXXXXX, 01XXXXXXXX, 7XXXXXXXX, 1XXXXXXXX, 254XXXXXXXXX, or +254XXXXXXXXX.')
                 ->example('0700000001'),
 
             ImportColumn::make('alternate_phone')
+                ->castStateUsing(fn (mixed $state): ?string => self::normalizeKenyanPhone($state))
                 ->rules(['nullable', 'string', 'max:20']),
 
             ImportColumn::make('email')
@@ -100,7 +106,10 @@ class EmployeeImporter extends Importer
 
             ImportColumn::make('date_of_birth')
                 ->label('Date of Birth')
+                ->validationAttribute('date of birth')
+                ->castStateUsing(fn (mixed $state): ?string => self::normalizeDate($state))
                 ->rules(['nullable', 'date_format:Y-m-d', 'before_or_equal:today'])
+                ->helperText('Accepted formats include YYYY-MM-DD, YYYY/MM/DD, DD/MM/YYYY, and DD-MM-YYYY.')
                 ->example('1995-05-20'),
 
             ImportColumn::make('place_of_birth')
@@ -125,10 +134,13 @@ class EmployeeImporter extends Importer
 
             ImportColumn::make('hire_date')
                 ->label('Hire Date')
+                ->validationAttribute('hire date')
                 ->guess(['hire_date', 'hire date', 'employment date', 'date hired'])
                 ->exampleHeader('hire_date')
+                ->castStateUsing(fn (mixed $state): ?string => self::normalizeDate($state))
                 ->requiredMappingForNewRecordsOnly()
                 ->rules(['required', 'date_format:Y-m-d'])
+                ->helperText('Accepted formats include YYYY-MM-DD, YYYY/MM/DD, DD/MM/YYYY, and DD-MM-YYYY.')
                 ->example('2026-07-01'),
 
             ImportColumn::make('department')
@@ -171,10 +183,12 @@ class EmployeeImporter extends Importer
                 ->example('active'),
 
             ImportColumn::make('contract_start_date')
+                ->castStateUsing(fn (mixed $state): ?string => self::normalizeDate($state))
                 ->rules(['nullable', 'date_format:Y-m-d'])
                 ->example(''),
 
             ImportColumn::make('contract_end_date')
+                ->castStateUsing(fn (mixed $state): ?string => self::normalizeDate($state))
                 ->rules(['nullable', 'date_format:Y-m-d', 'after_or_equal:contract_start_date'])
                 ->example(''),
 
@@ -225,10 +239,12 @@ class EmployeeImporter extends Importer
 
             ImportColumn::make('mpesa_number')
                 ->label('M-Pesa Number')
+                ->castStateUsing(fn (mixed $state): ?string => self::normalizeKenyanPhone($state))
                 ->rules(['nullable', 'string', 'max:20']),
 
             ImportColumn::make('airtel_money_number')
                 ->label('Airtel Money Number')
+                ->castStateUsing(fn (mixed $state): ?string => self::normalizeKenyanPhone($state))
                 ->rules(['nullable', 'string', 'max:20']),
 
             ImportColumn::make('tax_enabled')
@@ -285,6 +301,7 @@ class EmployeeImporter extends Importer
                 ->rules(['nullable', 'string', 'max:80']),
 
             ImportColumn::make('tax_exemption_expiry')
+                ->castStateUsing(fn (mixed $state): ?string => self::normalizeDate($state))
                 ->rules(['nullable', 'date_format:Y-m-d']),
 
             ImportColumn::make('notes')
@@ -313,6 +330,67 @@ class EmployeeImporter extends Importer
         return new Employee();
     }
 
+    protected function beforeValidate(): void
+    {
+        foreach ([
+            'date_of_birth',
+            'hire_date',
+            'contract_start_date',
+            'contract_end_date',
+            'tax_exemption_expiry',
+        ] as $field) {
+            $this->data[$field] = self::normalizeDate(
+                $this->data[$field] ?? null
+            );
+        }
+
+        foreach ([
+            'phone',
+            'alternate_phone',
+            'mpesa_number',
+            'airtel_money_number',
+        ] as $field) {
+            $this->data[$field] = self::normalizeKenyanPhone(
+                $this->data[$field] ?? null
+            );
+        }
+
+        $this->data['id_passport_number'] = self::normalizeIdentifier(
+            $this->data['id_passport_number'] ?? null
+        );
+
+        foreach ([
+            'employee_number',
+            'first_name',
+            'middle_name',
+            'last_name',
+            'kra_pin',
+            'nssf_number',
+            'nhif_sha_number',
+            'email',
+            'gender',
+            'nationality',
+            'place_of_birth',
+            'marital_status',
+            'county',
+            'address',
+            'postal_address',
+            'employment_type',
+            'work_station',
+            'status',
+            'payment_method',
+            'bank_name',
+            'bank_branch',
+            'account_number',
+            'tax_exemption_number',
+            'notes',
+        ] as $field) {
+            if (array_key_exists($field, $this->data) && is_string($this->data[$field])) {
+                $this->data[$field] = trim($this->data[$field]);
+            }
+        }
+    }
+
     protected function beforeCreate(): void
     {
         $this->record->created_by = $this->import->user_id;
@@ -327,6 +405,102 @@ class EmployeeImporter extends Importer
         $this->record->updated_by = $this->import->user_id;
         $this->record->status = $this->record->status ?: 'active';
         $this->record->is_active = $this->record->status === 'active';
+    }
+
+    private static function normalizeDate(mixed $state): ?string
+    {
+        if (blank($state)) {
+            return null;
+        }
+
+        $value = trim((string) $state);
+
+        if ($value === '') {
+            return null;
+        }
+
+        // Excel may export a date cell as its serial day number.
+        if (preg_match('/^\d{1,5}(?:\.0+)?$/', $value) === 1) {
+            $serial = (int) floor((float) $value);
+
+            if ($serial >= 1 && $serial <= 80000) {
+                return CarbonImmutable::create(1899, 12, 30)
+                    ->addDays($serial)
+                    ->format('Y-m-d');
+            }
+        }
+
+        $formats = [
+            'Y-m-d',
+            'Y/m/d',
+            'd/m/Y',
+            'd-m-Y',
+            'j/n/Y',
+            'j-n-Y',
+            'Y-m-d H:i:s',
+            'Y/m/d H:i:s',
+            'Y-m-d\TH:i:sP',
+            'Y-m-d\TH:i:s.uP',
+        ];
+
+        foreach ($formats as $format) {
+            try {
+                $date = CarbonImmutable::createFromFormat('!' . $format, $value);
+
+                if ($date !== false) {
+                    return $date->format('Y-m-d');
+                }
+            } catch (\Throwable) {
+                // Try the next supported format.
+            }
+        }
+
+        // Return the original value so Laravel provides a clear validation error.
+        return $value;
+    }
+
+    private static function normalizeKenyanPhone(mixed $state): ?string
+    {
+        if (blank($state)) {
+            return null;
+        }
+
+        $value = trim((string) $state);
+
+        if ($value === '') {
+            return null;
+        }
+
+        // Remove spreadsheet decimal suffixes and visual separators.
+        $value = preg_replace('/\.0+$/', '', $value) ?? $value;
+        $value = preg_replace('/[^\d+]/', '', $value) ?? $value;
+
+        if (str_starts_with($value, '+254')) {
+            $value = '0' . substr($value, 4);
+        } elseif (str_starts_with($value, '254') && strlen($value) === 12) {
+            $value = '0' . substr($value, 3);
+        } elseif (preg_match('/^[17]\d{8}$/', $value) === 1) {
+            // Excel commonly removes the leading zero from Kenyan mobile numbers.
+            $value = '0' . $value;
+        }
+
+        return $value;
+    }
+
+    private static function normalizeIdentifier(mixed $state): ?string
+    {
+        if (blank($state)) {
+            return null;
+        }
+
+        $value = trim((string) $state);
+
+        if ($value === '') {
+            return null;
+        }
+
+        // Prevent numeric identifiers exported by spreadsheets from ending in ".0".
+        return preg_replace('/\.0+$/', '', $value) ?? $value;
     }
 
     public static function getCompletedNotificationBody(Import $import): string
