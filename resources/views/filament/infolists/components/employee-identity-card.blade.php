@@ -37,12 +37,6 @@
         )
         : null;
 
-    /**
-     * Resolve an uploaded image directly from the public disk.
-     *
-     * The data URI fallback makes the card image render even when an existing
-     * public/storage symbolic link is stale or points to another project.
-     */
     $resolveUploadedImage = static function (mixed $storedPath): ?string {
         if (blank($storedPath)) {
             return null;
@@ -51,7 +45,10 @@
         if (is_array($storedPath)) {
             $storedPath = collect($storedPath)
                 ->flatten()
-                ->first(fn (mixed $value): bool => is_string($value) && trim($value) !== '');
+                ->first(
+                    fn (mixed $value): bool =>
+                        is_string($value) && trim($value) !== ''
+                );
         }
 
         if (! is_string($storedPath) || trim($storedPath) === '') {
@@ -78,13 +75,18 @@
 
         try {
             if (Storage::disk('public')->exists($diskPath)) {
-                $mimeType = Storage::disk('public')->mimeType($diskPath) ?: 'image/jpeg';
+                $mimeType = Storage::disk('public')->mimeType($diskPath)
+                    ?: 'image/jpeg';
+
                 $contents = Storage::disk('public')->get($diskPath);
 
-                return 'data:' . $mimeType . ';base64,' . base64_encode($contents);
+                return 'data:'
+                    . $mimeType
+                    . ';base64,'
+                    . base64_encode($contents);
             }
         } catch (Throwable) {
-            // Continue to the public-path fallback below.
+            // Continue to public-path fallback.
         }
 
         $publicPath = public_path(ltrim($storedPath, '/'));
@@ -105,157 +107,235 @@
         $employee->last_name,
     ])
         ->filter()
-        ->map(fn ($name) => mb_strtoupper(mb_substr((string) $name, 0, 1)))
+        ->map(
+            fn ($name) =>
+                mb_strtoupper(mb_substr((string) $name, 0, 1))
+        )
         ->take(3)
         ->implode('');
 
     $status = $employee->status ?: 'inactive';
-    $statusLabel = str($status)->headline();
-    $issueDate = $employee->created_at?->format('d.m.Y') ?: now()->format('d.m.Y');
-    $validUntil = $employee->contract_end_date?->format('d.m.Y') ?: 'WHILE EMPLOYED';
+    $statusLabel = str($status)->headline()->toString();
+
+    $issueDate = $employee->created_at?->format('d.m.Y')
+        ?: now()->format('d.m.Y');
+
+    $validUntil = $employee->contract_end_date?->format('d.m.Y')
+        ?: 'WHILE EMPLOYED';
+
+    $givenNames = trim(implode(' ', array_filter([
+        $employee->first_name,
+        $employee->middle_name,
+    ])));
+
+    $identityFields = [
+        [
+            'label' => 'Sex',
+            'value' => $employee->gender
+                ? mb_strtoupper($employee->gender)
+                : 'NOT PROVIDED',
+            'icon' => 'heroicon-o-user',
+        ],
+        [
+            'label' => 'Nationality',
+            'value' => mb_strtoupper(
+                $employee->nationality ?: 'NOT PROVIDED'
+            ),
+            'icon' => 'heroicon-o-globe-alt',
+        ],
+        [
+            'label' => 'Date of Birth',
+            'value' => $employee->date_of_birth?->format('d.m.Y')
+                ?: 'NOT PROVIDED',
+            'icon' => 'heroicon-o-calendar-days',
+        ],
+        [
+            'label' => 'Place of Birth',
+            'value' => mb_strtoupper(
+                $employee->place_of_birth ?: 'NOT PROVIDED'
+            ),
+            'icon' => 'heroicon-o-map-pin',
+        ],
+        [
+            'label' => 'National ID / Passport',
+            'value' => $employee->masked_id_number,
+            'icon' => 'heroicon-o-identification',
+        ],
+        [
+            'label' => 'County',
+            'value' => mb_strtoupper(
+                $employee->county ?: 'NOT PROVIDED'
+            ),
+            'icon' => 'heroicon-o-map',
+        ],
+        [
+            'label' => 'Date of Issue',
+            'value' => $issueDate,
+            'icon' => 'heroicon-o-document-check',
+        ],
+        [
+            'label' => 'Valid Until',
+            'value' => $validUntil,
+            'icon' => 'heroicon-o-shield-check',
+        ],
+    ];
+
+    $employmentFields = [
+        [
+            'label' => 'Job Title',
+            'value' => $employee->jobTitle?->name ?: 'Not assigned',
+            'icon' => 'heroicon-o-briefcase',
+        ],
+        [
+            'label' => 'Department',
+            'value' => $employee->department?->name ?: 'Not assigned',
+            'icon' => 'heroicon-o-building-office-2',
+        ],
+        [
+            'label' => 'Work Station',
+            'value' => $employee->work_station ?: 'Not assigned',
+            'icon' => 'heroicon-o-map-pin',
+        ],
+    ];
 @endphp
 
 <div
-    class="kenyan-style-staff-card"
-    style="--staff-primary: {{ $primary }}; --staff-secondary: {{ $secondary }};"
+    class="employee-id-card"
+    style="
+        --employee-primary: {{ $primary }};
+        --employee-secondary: {{ $secondary }};
+    "
 >
-    <div class="kenyan-style-staff-card__security-lines"></div>
+    <div class="employee-id-card__security" aria-hidden="true"></div>
 
-    <header class="kenyan-style-staff-card__header">
-        <div class="kenyan-style-staff-card__heading-block">
-            <div class="kenyan-style-staff-card__organization">
-                {{ mb_strtoupper($organizationName) }}
-            </div>
-            <div class="kenyan-style-staff-card__organization-subtitle">
-                STAFF IDENTIFICATION
-            </div>
+    <header class="employee-id-card__header">
+        <div class="employee-id-card__header-side employee-id-card__header-side--left">
+            <strong>{{ mb_strtoupper($organizationName) }}</strong>
+            <span>STAFF IDENTIFICATION</span>
         </div>
 
-        <div class="kenyan-style-staff-card__emblem" aria-hidden="true">
+        <div class="employee-id-card__emblem" aria-hidden="true">
             @if ($logoUrl)
-                <img src="{{ $logoUrl }}" alt="{{ $organizationName }} logo">
+                <img src="{{ $logoUrl }}" alt="">
             @else
                 <span>{{ $initials ?: 'HR' }}</span>
             @endif
         </div>
 
-        <div class="kenyan-style-staff-card__document-title">
+        <div class="employee-id-card__header-side employee-id-card__header-side--right">
             <strong>INTERNAL STAFF CARD</strong>
-            <span>Human Resource Record</span>
+            <span>HUMAN RESOURCE RECORD</span>
         </div>
     </header>
 
-    <main class="kenyan-style-staff-card__content">
-        <section class="kenyan-style-staff-card__portrait-column">
-            <div class="kenyan-style-staff-card__portrait-frame">
+    <main class="employee-id-card__main">
+        <aside class="employee-id-card__photo-column">
+            <div class="employee-id-card__photo">
                 @if ($avatarUrl)
                     <img
                         src="{{ $avatarUrl }}"
                         alt="{{ $employee->full_name }}"
-                        class="kenyan-style-staff-card__portrait"
                     >
                 @else
-                    <div class="kenyan-style-staff-card__portrait-placeholder">
-                        {{ $initials ?: 'STAFF' }}
-                    </div>
+                    <span>{{ $initials ?: 'STAFF' }}</span>
                 @endif
             </div>
 
-            <div class="kenyan-style-staff-card__staff-number">
-                {{ $employee->employee_number ?: 'PENDING' }}
-            </div>
+            <div class="employee-id-card__badges">
+                <span class="employee-id-card__number">
+                    {{ $employee->employee_number ?: 'PENDING' }}
+                </span>
 
-            <div class="kenyan-style-staff-card__status kenyan-style-staff-card__status--{{ $status }}">
-                {{ $statusLabel }}
+                <span
+                    class="
+                        employee-id-card__status
+                        employee-id-card__status--{{ $status }}
+                    "
+                >
+                    <i></i>
+                    {{ $statusLabel }}
+                </span>
             </div>
-        </section>
+        </aside>
 
-        <section class="kenyan-style-staff-card__identity-column">
-            <div class="kenyan-style-staff-card__identity-row kenyan-style-staff-card__identity-row--names">
-                <div class="kenyan-style-staff-card__field kenyan-style-staff-card__field--wide">
-                    <span>SURNAME</span>
-                    <strong>{{ mb_strtoupper($employee->last_name ?: 'NOT PROVIDED') }}</strong>
+        <section class="employee-id-card__identity">
+            <div class="employee-id-card__names">
+                <div class="employee-id-card__name">
+                    <span>Surname</span>
+                    <strong>
+                        {{ mb_strtoupper(
+                            $employee->last_name ?: 'NOT PROVIDED'
+                        ) }}
+                    </strong>
                 </div>
 
-                <div class="kenyan-style-staff-card__field kenyan-style-staff-card__field--wide">
-                    <span>GIVEN NAMES</span>
+                <div class="employee-id-card__name">
+                    <span>Given names</span>
                     <strong>
-                        {{ mb_strtoupper(trim(implode(' ', array_filter([
-                            $employee->first_name,
-                            $employee->middle_name,
-                        ]))) ?: 'NOT PROVIDED') }}
+                        {{ mb_strtoupper(
+                            $givenNames ?: 'NOT PROVIDED'
+                        ) }}
                     </strong>
                 </div>
             </div>
 
-            <div class="kenyan-style-staff-card__identity-grid">
-                <div class="kenyan-style-staff-card__field">
-                    <span>SEX</span>
-                    <strong>{{ $employee->gender ? mb_strtoupper($employee->gender) : 'NOT PROVIDED' }}</strong>
-                </div>
+            <div class="employee-id-card__fields">
+                @foreach ($identityFields as $field)
+                    <article class="employee-id-card__field">
+                        <span class="employee-id-card__field-icon">
+                            <x-filament::icon
+                                :icon="$field['icon']"
+                                class="employee-id-card__icon"
+                            />
+                        </span>
 
-                <div class="kenyan-style-staff-card__field">
-                    <span>NATIONALITY</span>
-                    <strong>{{ mb_strtoupper($employee->nationality ?: 'NOT PROVIDED') }}</strong>
-                </div>
-
-                <div class="kenyan-style-staff-card__field">
-                    <span>DATE OF BIRTH</span>
-                    <strong>{{ $employee->date_of_birth?->format('d.m.Y') ?: 'NOT PROVIDED' }}</strong>
-                </div>
-
-                <div class="kenyan-style-staff-card__field">
-                    <span>PLACE OF BIRTH</span>
-                    <strong>{{ mb_strtoupper($employee->place_of_birth ?: 'NOT PROVIDED') }}</strong>
-                </div>
-
-                <div class="kenyan-style-staff-card__field">
-                    <span>NATIONAL ID / PASSPORT</span>
-                    <strong>{{ $employee->masked_id_number }}</strong>
-                </div>
-
-                <div class="kenyan-style-staff-card__field">
-                    <span>COUNTY</span>
-                    <strong>{{ mb_strtoupper($employee->county ?: 'NOT PROVIDED') }}</strong>
-                </div>
-
-                <div class="kenyan-style-staff-card__field">
-                    <span>DATE OF ISSUE</span>
-                    <strong>{{ $issueDate }}</strong>
-                </div>
-
-                <div class="kenyan-style-staff-card__field">
-                    <span>VALID UNTIL</span>
-                    <strong>{{ $validUntil }}</strong>
-                </div>
-            </div>
-
-            <div class="kenyan-style-staff-card__employment-strip">
-                <div>
-                    <span>JOB TITLE</span>
-                    <strong>{{ $employee->jobTitle?->name ?: 'Not assigned' }}</strong>
-                </div>
-
-                <div>
-                    <span>DEPARTMENT</span>
-                    <strong>{{ $employee->department?->name ?: 'Not assigned' }}</strong>
-                </div>
-
-                <div>
-                    <span>WORK STATION</span>
-                    <strong>{{ $employee->work_station ?: 'Not assigned' }}</strong>
-                </div>
+                        <div>
+                            <span>{{ $field['label'] }}</span>
+                            <strong>{{ $field['value'] }}</strong>
+                        </div>
+                    </article>
+                @endforeach
             </div>
         </section>
     </main>
 
-    <footer class="kenyan-style-staff-card__footer">
-        <div>
-            <strong>INTERNAL USE ONLY</strong>
-            <span>Organization-issued staff identification. Not a Kenyan National Identity Card.</span>
+    <section class="employee-id-card__employment">
+        @foreach ($employmentFields as $field)
+            <article class="employee-id-card__employment-item">
+                <span class="employee-id-card__employment-icon">
+                    <x-filament::icon
+                        :icon="$field['icon']"
+                        class="employee-id-card__icon"
+                    />
+                </span>
+
+                <div>
+                    <span>{{ $field['label'] }}</span>
+                    <strong>{{ $field['value'] }}</strong>
+                </div>
+            </article>
+        @endforeach
+    </section>
+
+    <footer class="employee-id-card__footer">
+        <div class="employee-id-card__internal-use">
+            <span class="employee-id-card__footer-icon">
+                <x-filament::icon
+                    icon="heroicon-o-lock-closed"
+                    class="employee-id-card__icon"
+                />
+            </span>
+
+            <div>
+                <strong>INTERNAL USE ONLY</strong>
+                <span>
+                    Organization-issued staff identification.
+                    Not a Kenyan National Identity Card.
+                </span>
+            </div>
         </div>
 
-        <div class="kenyan-style-staff-card__verification">
+        <div class="employee-id-card__verified">
             <span>HR VERIFIED RECORD</span>
             <strong>{{ now()->format('d M Y') }}</strong>
         </div>
@@ -263,391 +343,804 @@
 </div>
 
 <style>
-    .kenyan-style-staff-card {
+    .employee-id-card {
         position: relative;
         isolation: isolate;
-        overflow: hidden;
+        container-type: inline-size;
         width: 100%;
-        border: 1px solid color-mix(in srgb, var(--staff-primary) 34%, #d1d5db);
-        border-radius: 22px;
-        color: #15251c;
+        max-width: 100%;
+        overflow: hidden;
+        border: 1px solid color-mix(
+            in srgb,
+            var(--employee-primary) 30%,
+            #d1d5db
+        );
+        border-radius: 1.35rem;
+        color: #17251d;
         background:
-            radial-gradient(circle at 11% 78%, color-mix(in srgb, var(--staff-secondary) 18%, transparent) 0 20%, transparent 42%),
-            radial-gradient(circle at 82% 18%, rgba(190, 24, 93, 0.08) 0 18%, transparent 42%),
-            linear-gradient(128deg, #fbfffc 0%, #eef8f1 48%, #f9fffb 100%);
-        box-shadow: 0 16px 45px rgba(15, 23, 42, 0.12);
+            radial-gradient(
+                circle at 8% 88%,
+                color-mix(
+                    in srgb,
+                    var(--employee-secondary) 17%,
+                    transparent
+                ) 0 18%,
+                transparent 40%
+            ),
+            radial-gradient(
+                circle at 96% 4%,
+                color-mix(
+                    in srgb,
+                    var(--employee-primary) 13%,
+                    transparent
+                ) 0 20%,
+                transparent 42%
+            ),
+            linear-gradient(
+                135deg,
+                #fbfffc 0%,
+                #eef8f1 52%,
+                #fbfffc 100%
+            );
+        box-shadow: 0 18px 48px rgb(15 23 42 / 0.12);
     }
 
-    .dark .kenyan-style-staff-card {
+    .employee-id-card *,
+    .employee-id-card *::before,
+    .employee-id-card *::after {
+        box-sizing: border-box;
+    }
+
+    .dark .employee-id-card {
         color: #f8fafc;
-        border-color: color-mix(in srgb, var(--staff-primary) 52%, #334155);
+        border-color: color-mix(
+            in srgb,
+            var(--employee-primary) 48%,
+            #334155
+        );
         background:
-            radial-gradient(circle at 11% 78%, color-mix(in srgb, var(--staff-secondary) 22%, transparent) 0 20%, transparent 42%),
-            radial-gradient(circle at 82% 18%, rgba(244, 63, 94, 0.10) 0 18%, transparent 42%),
-            linear-gradient(128deg, #111827 0%, #14241a 48%, #101b15 100%);
+            radial-gradient(
+                circle at 8% 88%,
+                color-mix(
+                    in srgb,
+                    var(--employee-secondary) 20%,
+                    transparent
+                ) 0 18%,
+                transparent 40%
+            ),
+            radial-gradient(
+                circle at 96% 4%,
+                color-mix(
+                    in srgb,
+                    var(--employee-primary) 18%,
+                    transparent
+                ) 0 20%,
+                transparent 42%
+            ),
+            linear-gradient(
+                135deg,
+                #111827 0%,
+                #14241a 52%,
+                #101b15 100%
+            );
     }
 
-    .kenyan-style-staff-card__security-lines {
+    .employee-id-card__security {
         position: absolute;
         inset: 0;
-        z-index: -2;
-        opacity: 0.6;
+        z-index: -1;
+        opacity: 0.58;
         background:
             repeating-radial-gradient(
                 ellipse at 50% 50%,
-                transparent 0 13px,
-                color-mix(in srgb, var(--staff-primary) 7%, transparent) 14px 15px
+                transparent 0 14px,
+                color-mix(
+                    in srgb,
+                    var(--employee-primary) 6%,
+                    transparent
+                ) 15px 16px
             ),
             repeating-linear-gradient(
-                116deg,
-                transparent 0 18px,
-                color-mix(in srgb, var(--staff-secondary) 5%, transparent) 19px 20px
+                118deg,
+                transparent 0 20px,
+                color-mix(
+                    in srgb,
+                    var(--employee-secondary) 5%,
+                    transparent
+                ) 21px 22px
             );
         pointer-events: none;
     }
 
-    .kenyan-style-staff-card__header {
+    .employee-id-card__icon {
+        width: 1.05rem;
+        height: 1.05rem;
+    }
+
+    .employee-id-card__header {
         display: grid;
-        grid-template-columns: 1fr auto 1fr;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
         align-items: center;
-        gap: 18px;
-        padding: 20px 26px 18px;
-        border-bottom: 1px solid color-mix(in srgb, var(--staff-primary) 18%, transparent);
-        background:
-            linear-gradient(90deg, color-mix(in srgb, var(--staff-primary) 10%, transparent), transparent 45%),
-            linear-gradient(270deg, rgba(190, 24, 93, 0.06), transparent 45%);
+        gap: 1rem;
+        padding: 1rem 1.35rem;
+        border-bottom: 1px solid color-mix(
+            in srgb,
+            var(--employee-primary) 17%,
+            transparent
+        );
+        background: linear-gradient(
+            90deg,
+            color-mix(
+                in srgb,
+                var(--employee-primary) 8%,
+                transparent
+            ),
+            transparent 52%
+        );
     }
 
-    .kenyan-style-staff-card__organization,
-    .kenyan-style-staff-card__document-title strong {
-        color: var(--staff-primary);
-        font-size: clamp(15px, 1.8vw, 22px);
-        font-weight: 950;
-        letter-spacing: 0.06em;
-        line-height: 1.05;
+    .employee-id-card__header-side {
+        min-width: 0;
     }
 
-    .kenyan-style-staff-card__organization-subtitle,
-    .kenyan-style-staff-card__document-title span {
+    .employee-id-card__header-side strong,
+    .employee-id-card__header-side span {
         display: block;
-        margin-top: 5px;
+    }
+
+    .employee-id-card__header-side strong {
+        overflow-wrap: anywhere;
+        color: var(--employee-primary);
+        font-size: clamp(0.85rem, 2vw, 1.25rem);
+        font-weight: 950;
+        letter-spacing: 0.055em;
+        line-height: 1.08;
+    }
+
+    .employee-id-card__header-side span {
+        margin-top: 0.28rem;
         color: #64748b;
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: 0.13em;
-        text-transform: uppercase;
+        font-size: 0.58rem;
+        font-weight: 850;
+        letter-spacing: 0.11em;
     }
 
-    .dark .kenyan-style-staff-card__organization-subtitle,
-    .dark .kenyan-style-staff-card__document-title span,
-    .dark .kenyan-style-staff-card__field span,
-    .dark .kenyan-style-staff-card__employment-strip span,
-    .dark .kenyan-style-staff-card__footer span {
-        color: #94a3b8;
-    }
-
-    .kenyan-style-staff-card__document-title {
+    .employee-id-card__header-side--right {
         text-align: right;
     }
 
-    .kenyan-style-staff-card__emblem {
+    .employee-id-card__header-side--right strong {
+        font-size: clamp(0.72rem, 1.55vw, 0.95rem);
+    }
+
+    .dark .employee-id-card__header-side span,
+    .dark .employee-id-card__name > span,
+    .dark .employee-id-card__field > div > span,
+    .dark .employee-id-card__employment-item > div > span,
+    .dark .employee-id-card__footer span {
+        color: #94a3b8;
+    }
+
+    .employee-id-card__emblem {
         display: grid;
-        width: 64px;
-        height: 64px;
+        width: 3.6rem;
+        height: 3.6rem;
         place-items: center;
         overflow: hidden;
-        border: 2px solid color-mix(in srgb, var(--staff-primary) 35%, transparent);
+        border: 2px solid color-mix(
+            in srgb,
+            var(--employee-primary) 35%,
+            transparent
+        );
         border-radius: 50%;
-        color: #ffffff;
-        background:
-            linear-gradient(145deg, var(--staff-primary), var(--staff-secondary));
-        box-shadow: 0 9px 24px rgba(15, 23, 42, 0.16);
+        color: white;
+        background: linear-gradient(
+            145deg,
+            var(--employee-primary),
+            var(--employee-secondary)
+        );
+        box-shadow: 0 9px 22px rgb(15 23 42 / 0.15);
     }
 
-    .kenyan-style-staff-card__emblem img {
+    .employee-id-card__emblem img {
         width: 100%;
         height: 100%;
-        padding: 7px;
+        padding: 0.35rem;
         object-fit: contain;
-        background: rgba(255, 255, 255, 0.92);
+        background: rgb(255 255 255 / 0.94);
     }
 
-    .kenyan-style-staff-card__emblem span {
-        font-size: 15px;
+    .employee-id-card__emblem span {
+        font-size: 0.75rem;
         font-weight: 950;
         letter-spacing: 0.08em;
     }
 
-    .kenyan-style-staff-card__content {
+    .employee-id-card__main {
         display: grid;
-        grid-template-columns: 205px minmax(0, 1fr);
-        gap: 26px;
-        padding: 26px;
+        grid-template-columns: 11rem minmax(0, 1fr);
+        gap: 1.35rem;
+        align-items: center;
+        padding: 1.35rem;
     }
 
-    .kenyan-style-staff-card__portrait-column {
+    .employee-id-card__photo-column {
         display: flex;
+        min-width: 0;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        gap: 10px;
+        gap: 0.7rem;
     }
 
-    .kenyan-style-staff-card__portrait-frame {
-        width: 166px;
-        max-width: 100%;
+    .employee-id-card__photo {
+        display: grid;
+        width: min(9.4rem, 100%);
         aspect-ratio: 4 / 5;
+        place-items: center;
         overflow: hidden;
-        border: 1px solid color-mix(in srgb, var(--staff-primary) 25%, #cbd5e1);
-        border-radius: 12px;
-        background: #e2e8f0;
+        border: 1px solid color-mix(
+            in srgb,
+            var(--employee-primary) 25%,
+            #cbd5e1
+        );
+        border-radius: 0.82rem;
+        color: var(--employee-primary);
+        background: linear-gradient(145deg, #e2e8f0, #f8fafc);
         box-shadow:
-            0 0 0 5px rgba(255, 255, 255, 0.80),
-            0 12px 28px rgba(15, 23, 42, 0.16);
+            0 0 0 0.3rem rgb(255 255 255 / 0.78),
+            0 14px 30px rgb(15 23 42 / 0.16);
+        font-size: 1.6rem;
+        font-weight: 950;
+        letter-spacing: 0.08em;
     }
 
-    .dark .kenyan-style-staff-card__portrait-frame {
+    .dark .employee-id-card__photo {
+        background: linear-gradient(145deg, #1e293b, #0f172a);
         box-shadow:
-            0 0 0 5px rgba(15, 23, 42, 0.70),
-            0 12px 28px rgba(0, 0, 0, 0.30);
+            0 0 0 0.3rem rgb(15 23 42 / 0.7),
+            0 14px 30px rgb(0 0 0 / 0.28);
     }
 
-    .kenyan-style-staff-card__portrait,
-    .kenyan-style-staff-card__portrait-placeholder {
+    .employee-id-card__photo img {
         width: 100%;
         height: 100%;
-    }
-
-    .kenyan-style-staff-card__portrait {
         object-fit: cover;
     }
 
-    .kenyan-style-staff-card__portrait-placeholder {
+    .employee-id-card__badges {
         display: grid;
-        place-items: center;
-        color: var(--staff-primary);
-        background:
-            linear-gradient(145deg, #e2e8f0, #f8fafc);
-        font-size: 30px;
-        font-weight: 950;
-        letter-spacing: 0.08em;
+        justify-items: center;
+        gap: 0.4rem;
+        width: 100%;
     }
 
-    .kenyan-style-staff-card__staff-number {
-        padding: 7px 13px;
+    .employee-id-card__number,
+    .employee-id-card__status {
+        max-width: 100%;
+        overflow-wrap: anywhere;
         border-radius: 999px;
-        color: #ffffff;
-        background: var(--staff-primary);
-        box-shadow: 0 8px 18px color-mix(in srgb, var(--staff-primary) 22%, transparent);
-        font-size: 12px;
-        font-weight: 900;
-        letter-spacing: 0.08em;
-    }
-
-    .kenyan-style-staff-card__status {
-        padding: 5px 10px;
-        border-radius: 999px;
-        font-size: 9px;
-        font-weight: 900;
-        letter-spacing: 0.10em;
+        text-align: center;
         text-transform: uppercase;
     }
 
-    .kenyan-style-staff-card__status--active {
+    .employee-id-card__number {
+        padding: 0.42rem 0.72rem;
+        color: white;
+        background: var(--employee-primary);
+        box-shadow: 0 8px 18px color-mix(
+            in srgb,
+            var(--employee-primary) 22%,
+            transparent
+        );
+        font-size: 0.65rem;
+        font-weight: 900;
+        letter-spacing: 0.07em;
+    }
+
+    .employee-id-card__status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.32rem;
+        padding: 0.32rem 0.62rem;
+        font-size: 0.58rem;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+    }
+
+    .employee-id-card__status i {
+        width: 0.4rem;
+        height: 0.4rem;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    .employee-id-card__status--active {
         color: #166534;
         background: #dcfce7;
     }
 
-    .kenyan-style-staff-card__status--on_leave {
+    .employee-id-card__status--on_leave {
         color: #1d4ed8;
         background: #dbeafe;
     }
 
-    .kenyan-style-staff-card__status--suspended {
+    .employee-id-card__status--suspended {
         color: #92400e;
         background: #fef3c7;
     }
 
-    .kenyan-style-staff-card__status--inactive {
+    .employee-id-card__status--inactive {
         color: #374151;
         background: #e5e7eb;
     }
 
-    .kenyan-style-staff-card__status--exited {
+    .employee-id-card__status--exited {
         color: #991b1b;
         background: #fee2e2;
     }
 
-    .kenyan-style-staff-card__identity-column {
+    .employee-id-card__identity {
         min-width: 0;
-        align-self: center;
     }
 
-    .kenyan-style-staff-card__identity-row {
+    .employee-id-card__names {
         display: grid;
-        gap: 15px;
+        grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.2fr);
+        gap: 0.75rem;
+        margin-bottom: 0.85rem;
     }
 
-    .kenyan-style-staff-card__identity-row--names {
-        grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.25fr);
-        margin-bottom: 17px;
-    }
-
-    .kenyan-style-staff-card__identity-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 15px 17px;
-    }
-
-    .kenyan-style-staff-card__field {
+    .employee-id-card__name {
         min-width: 0;
-        padding-left: 10px;
-        border-left: 3px solid color-mix(in srgb, var(--staff-primary) 42%, transparent);
+        padding: 0.75rem 0.85rem;
+        border: 1px solid color-mix(
+            in srgb,
+            var(--employee-primary) 14%,
+            transparent
+        );
+        border-radius: 0.78rem;
+        background: color-mix(
+            in srgb,
+            var(--employee-primary) 4%,
+            transparent
+        );
+
     }
 
-    .kenyan-style-staff-card__field span,
-    .kenyan-style-staff-card__employment-strip span {
+    .employee-id-card__name > span,
+    .employee-id-card__field > div > span,
+    .employee-id-card__employment-item > div > span {
         display: block;
-        margin-bottom: 4px;
+        margin-bottom: 0.2rem;
         color: #64748b;
-        font-size: 9px;
+        font-size: 0.45rem;
         font-weight: 900;
         letter-spacing: 0.08em;
         text-transform: uppercase;
     }
 
-    .kenyan-style-staff-card__field strong {
+    .employee-id-card__name strong {
         display: block;
         overflow-wrap: anywhere;
-        font-size: 13px;
-        font-weight: 800;
-        line-height: 1.25;
+        color: var(--employee-primary);
+        font-size: clamp(0.55rem, 2vw, 1.05rem);
+        font-weight: 950;
+        letter-spacing: 0.018em;
+        line-height: 1.08;
     }
 
-    .kenyan-style-staff-card__identity-row--names .kenyan-style-staff-card__field strong {
-        color: var(--staff-primary);
-        font-size: clamp(18px, 2.35vw, 28px);
-        line-height: 1.05;
-        letter-spacing: 0.025em;
-    }
-
-    .kenyan-style-staff-card__identity-row--names .kenyan-style-staff-card__field:last-child strong {
-        font-size: clamp(17px, 2.05vw, 25px);
-    }
-
-    .kenyan-style-staff-card__employment-strip {
+    .employee-id-card__fields {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: 19px;
-        padding: 13px 15px;
-        border: 1px solid color-mix(in srgb, var(--staff-primary) 17%, transparent);
-        border-radius: 12px;
-        background: color-mix(in srgb, var(--staff-primary) 6%, transparent);
+        grid-template-columns: repeat(
+            auto-fit,
+            minmax(min(9.5rem, 100%), 1fr)
+        );
+        gap: 0.62rem;
     }
 
-    .kenyan-style-staff-card__employment-strip strong {
+    .employee-id-card__field {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 0.52rem;
+        min-width: 0;
+        padding: 0.62rem;
+        border: 1px solid color-mix(
+            in srgb,
+            var(--employee-primary) 11%,
+            transparent
+        );
+        border-radius: 0.7rem;
+        background: rgb(255 255 255 / 0.42);
+    }
+
+    .dark .employee-id-card__field {
+        background: rgb(15 23 42 / 0.3);
+    }
+
+    .employee-id-card__field-icon,
+    .employee-id-card__employment-icon,
+    .employee-id-card__footer-icon {
+        display: grid;
+        flex: 0 0 auto;
+        width: 1.85rem;
+        height: 1.85rem;
+        place-items: center;
+        border-radius: 0.58rem;
+        color: var(--employee-primary);
+        background: color-mix(
+            in srgb,
+            var(--employee-primary) 9%,
+            white
+        );
+    }
+
+    .dark .employee-id-card__field-icon,
+    .dark .employee-id-card__employment-icon,
+    .dark .employee-id-card__footer-icon {
+        background: color-mix(
+            in srgb,
+            var(--employee-primary) 18%,
+            #0f172a
+        );
+    }
+
+    .employee-id-card__field > div {
+        min-width: 0;
+    }
+
+    .employee-id-card__field strong,
+    .employee-id-card__employment-item strong {
         display: block;
         overflow-wrap: anywhere;
-        font-size: 12px;
-        line-height: 1.25;
+        font-size: 0.68rem;
+        font-weight: 800;
+        line-height: 1.3;
     }
 
-    .kenyan-style-staff-card__footer {
+    .employee-id-card__employment {
+        display: grid;
+        grid-template-columns: repeat(
+            3,
+            minmax(0, 1fr)
+        );
+        gap: 0.65rem;
+        margin: 0 1.35rem 1rem;
+        padding: 0.8rem;
+        border: 1px solid color-mix(
+            in srgb,
+            var(--employee-primary) 17%,
+            transparent
+        );
+        border-radius: 0.85rem;
+        background: color-mix(
+            in srgb,
+            var(--employee-primary) 6%,
+            transparent
+        );
+    }
+
+    .employee-id-card__employment-item {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 0.52rem;
+        min-width: 0;
+    }
+
+    .employee-id-card__footer {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.78rem 1.35rem;
+        border-top: 1px solid color-mix(
+            in srgb,
+            var(--employee-primary) 17%,
+            transparent
+        );
+        background: linear-gradient(
+            90deg,
+            color-mix(
+                in srgb,
+                var(--employee-primary) 7%,
+                transparent
+            ),
+            transparent
+        );
+    }
+
+    .employee-id-card__internal-use {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 18px;
-        padding: 13px 26px;
-        border-top: 1px solid color-mix(in srgb, var(--staff-primary) 18%, transparent);
-        background:
-            linear-gradient(90deg, color-mix(in srgb, var(--staff-primary) 7%, transparent), transparent);
-        font-size: 10px;
+        justify-content: center;
+        gap: 0.62rem;
+        min-width: 0;
+        text-align: center;
     }
 
-    .kenyan-style-staff-card__footer strong,
-    .kenyan-style-staff-card__footer span {
+    .employee-id-card__internal-use > div {
+        min-width: 0;
+    }
+
+    .employee-id-card__footer strong,
+    .employee-id-card__footer span {
         display: block;
     }
 
-    .kenyan-style-staff-card__footer > div:first-child strong {
-        color: var(--staff-primary);
-        letter-spacing: 0.09em;
+    .employee-id-card__internal-use strong {
+        color: var(--employee-primary);
+        font-size: 0.61rem;
+        font-weight: 900;
+        letter-spacing: 0.08em;
     }
 
-    .kenyan-style-staff-card__footer span {
-        margin-top: 3px;
+    .employee-id-card__internal-use span {
+        margin-top: 0.14rem;
         color: #64748b;
+        font-size: 0.56rem;
+        line-height: 1.35;
     }
 
-    .kenyan-style-staff-card__verification {
+    .employee-id-card__verified {
+        flex: 0 0 auto;
         text-align: right;
     }
 
-    .kenyan-style-staff-card__verification span {
-        font-size: 8px;
+    .employee-id-card__verified span {
+        color: #64748b;
+        font-size: 0.5rem;
         font-weight: 900;
-        letter-spacing: 0.10em;
+        letter-spacing: 0.09em;
     }
 
-    .kenyan-style-staff-card__verification strong {
-        color: var(--staff-primary);
-        font-size: 11px;
+    .employee-id-card__verified strong {
+        margin-top: 0.14rem;
+        color: var(--employee-primary);
+        font-size: 0.64rem;
     }
 
-    @media (max-width: 1050px) {
-        .kenyan-style-staff-card__identity-grid {
+    /*
+     * Mobile layout:
+     * Keep the employee photograph and identity information side by side,
+     * matching the landscape structure of a physical identification card.
+     */
+    @container (max-width: 640px) {
+        .employee-id-card {
+            border-radius: 0.95rem;
+        }
+
+        .employee-id-card__header {
+            gap: 0.38rem;
+            padding: 0.55rem 0.62rem;
+        }
+
+        .employee-id-card__header-side {
+            text-align: center;
+        }
+
+        .employee-id-card__header-side strong {
+            font-size: clamp(0.55rem, 2.7vw, 0.75rem);
+            letter-spacing: 0.035em;
+        }
+
+        .employee-id-card__header-side--right strong {
+            font-size: clamp(0.48rem, 2.3vw, 0.67rem);
+        }
+
+        .employee-id-card__header-side span {
+            margin-top: 0.14rem;
+            font-size: clamp(0.36rem, 1.65vw, 0.46rem);
+            letter-spacing: 0.055em;
+        }
+
+        .employee-id-card__emblem {
+            width: 2.35rem;
+            height: 2.35rem;
+        }
+
+        .employee-id-card__main {
+            grid-template-columns: minmax(5.7rem, 31%) minmax(0, 69%);
+            gap: 0.55rem;
+            align-items: start;
+            padding: 0.65rem;
+        }
+
+        .employee-id-card__photo-column {
+            gap: 0.45rem;
+        }
+
+        .employee-id-card__photo {
+            width: min(6.6rem, 100%);
+            border-radius: 0.55rem;
+            box-shadow:
+                0 0 0 0.16rem rgb(255 255 255 / 0.78),
+                0 8px 16px rgb(15 23 42 / 0.15);
+            font-size: 1rem;
+        }
+
+        .employee-id-card__badges {
+            gap: 0.28rem;
+        }
+
+        .employee-id-card__number {
+            padding: 0.27rem 0.42rem;
+            font-size: 0.43rem;
+            letter-spacing: 0.045em;
+        }
+
+        .employee-id-card__status {
+            gap: 0.2rem;
+            padding: 0.21rem 0.36rem;
+            font-size: 0.39rem;
+            letter-spacing: 0.045em;
+        }
+
+        .employee-id-card__status i {
+            width: 0.27rem;
+            height: 0.27rem;
+        }
+
+        .employee-id-card__names {
+            grid-template-columns: 1fr;
+            gap: 0.35rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .employee-id-card__name {
+            padding: 0.35rem 0.42rem;
+            border-radius: 0.45rem;
+            text-align: center;
+        }
+
+        .employee-id-card__name > span {
+            margin-bottom: 0.08rem;
+            font-size: 0.38rem;
+            letter-spacing: 0.055em;
+        }
+
+        .employee-id-card__name strong {
+            font-size: clamp(0.68rem, 3.4vw, 0.92rem);
+            line-height: 1;
+        }
+
+        .employee-id-card__fields {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.28rem;
+        }
+
+        .employee-id-card__field {
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 0.27rem;
+            padding: 0.28rem;
+            border-radius: 0.4rem;
+        }
+
+        .employee-id-card__field-icon {
+            width: 1.15rem;
+            height: 1.15rem;
+            border-radius: 0.34rem;
+        }
+
+        .employee-id-card__field-icon .employee-id-card__icon {
+            width: 0.68rem;
+            height: 0.68rem;
+        }
+
+        .employee-id-card__field > div > span {
+            margin-bottom: 0.05rem;
+            font-size: 0.32rem;
+            letter-spacing: 0.045em;
+        }
+
+        .employee-id-card__field strong {
+            font-size: clamp(0.42rem, 2.1vw, 0.55rem);
+            line-height: 1.15;
+        }
+
+        .employee-id-card__employment {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.28rem;
+            margin: 0 0.65rem 0.55rem;
+            padding: 0.4rem;
+            border-radius: 0.5rem;
+        }
+
+        .employee-id-card__employment-item {
+            display: block;
+            text-align: center;
+        }
+
+        .employee-id-card__employment-icon {
+            width: 1.2rem;
+            height: 1.2rem;
+            margin: 0 auto 0.18rem;
+            border-radius: 0.35rem;
+        }
+
+        .employee-id-card__employment-icon .employee-id-card__icon {
+            width: 0.7rem;
+            height: 0.7rem;
+        }
+
+        .employee-id-card__employment-item > div > span {
+            margin-bottom: 0.05rem;
+            font-size: 0.32rem;
+            letter-spacing: 0.045em;
+        }
+
+        .employee-id-card__employment-item strong {
+            font-size: clamp(0.4rem, 2vw, 0.53rem);
+            line-height: 1.15;
+        }
+
+        .employee-id-card__footer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.45rem 0.6rem;
+            text-align: center;
+        }
+
+        .employee-id-card__internal-use {
+            width: 100%;
+        }
+
+        .employee-id-card__footer-icon {
+            width: 1.35rem;
+            height: 1.35rem;
+            border-radius: 0.4rem;
+        }
+
+        .employee-id-card__footer-icon .employee-id-card__icon {
+            width: 0.72rem;
+            height: 0.72rem;
+        }
+
+        .employee-id-card__internal-use strong {
+            font-size: 0.42rem;
+        }
+
+        .employee-id-card__internal-use span {
+            font-size: 0.37rem;
+        }
+
+        .employee-id-card__verified {
+            display: none;
         }
     }
 
-    @media (max-width: 760px) {
-        .kenyan-style-staff-card__header {
-            grid-template-columns: 1fr auto;
+    @container (max-width: 390px) {
+        .employee-id-card__main {
+            grid-template-columns: minmax(5.25rem, 30%) minmax(0, 70%);
+            gap: 0.42rem;
+            padding: 0.52rem;
         }
 
-        .kenyan-style-staff-card__document-title {
-            grid-column: 1 / -1;
-            text-align: left;
+        .employee-id-card__fields {
+            gap: 0.22rem;
         }
 
-        .kenyan-style-staff-card__content {
-            grid-template-columns: 1fr;
+        .employee-id-card__field {
+            gap: 0.2rem;
+            padding: 0.22rem;
         }
 
-        .kenyan-style-staff-card__portrait-column {
-            align-items: flex-start;
+        .employee-id-card__field-icon {
+            width: 1rem;
+            height: 1rem;
         }
 
-        .kenyan-style-staff-card__portrait-frame {
-            width: 145px;
-        }
-
-        .kenyan-style-staff-card__identity-row--names,
-        .kenyan-style-staff-card__employment-strip {
-            grid-template-columns: 1fr;
+        .employee-id-card__employment {
+            margin-right: 0.52rem;
+            margin-left: 0.52rem;
         }
     }
 
-    @media (max-width: 520px) {
-        .kenyan-style-staff-card__header,
-        .kenyan-style-staff-card__content,
-        .kenyan-style-staff-card__footer {
-            padding-left: 17px;
-            padding-right: 17px;
-        }
-
-        .kenyan-style-staff-card__identity-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .kenyan-style-staff-card__footer {
-            align-items: flex-start;
-            flex-direction: column;
-        }
-
-        .kenyan-style-staff-card__verification {
-            text-align: left;
+    @media print {
+        .employee-id-card {
+            box-shadow: none;
+            break-inside: avoid;
         }
     }
 </style>

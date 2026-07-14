@@ -23,6 +23,7 @@ use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\MaxWidth;
 use Filament\Tables\Actions\ImportAction;
 use Filament\Tables\Table;
 use Filament\Forms;
@@ -679,7 +680,7 @@ class EmployeeResource extends Resource
                      ->importer(EmployeeImporter::class)
                      ->visible(fn (): bool => auth()->user()?->can('import employees')
                          || auth()->user()?->can('create employees')),
-             ])*/
+             ])
             ->headerActions([
                 Tables\Actions\Action::make('downloadExcelTemplate')
                     ->label('Excel Template')
@@ -697,6 +698,52 @@ class EmployeeResource extends Resource
                     ->label('Import Employees (CSV)')
                     ->icon('heroicon-o-arrow-up-tray')
                     ->importer(EmployeeImporter::class)
+                    ->visible(
+                        fn(): bool =>
+                            auth()->user()?->can('import employees') ||
+                            auth()->user()?->can('create employees')
+                    ),
+            ])*/
+            ->headerActions([
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('downloadExcelTemplate')
+                        ->label('Excel Workbook')
+                        ->icon('heroicon-o-table-cells')
+                        ->color('success')
+                        ->url(asset('templates/hr/employee_import_template.xlsx'))
+                        ->openUrlInNewTab(),
+                    Tables\Actions\Action::make('downloadCsvTemplate')
+                        ->label('CSV Template')
+                        ->icon('heroicon-o-document-text')
+                        ->color('info')
+                        ->url(route('hr.employee-import-template.csv')),
+                ])
+                    ->label('Import Templates')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('gray')
+                    ->button(),
+                ImportAction::make('importEmployees')
+                    ->label('Import Employees')
+                    ->icon('heroicon-o-cloud-arrow-up')
+                    ->color('primary')
+                    ->importer(EmployeeImporter::class)
+                    ->modalHeading('Import employee records')
+                    ->modalDescription(
+                        'Upload a completed CSV file, verify the column mappings, and begin the employee import.'
+                    )
+                    ->modalIcon('heroicon-o-user-plus')
+                    ->modalIconColor('primary')
+                    ->modalWidth(MaxWidth::FiveExtraLarge)
+                    ->modalSubmitActionLabel('Start Employee Import')
+                    ->modalContent(
+                        fn() => view(
+                            'filament.resources.hr.employee-resource.partials.import-employees-guide'
+                        )
+                    )
+                    ->stickyModalHeader()
+                    ->stickyModalFooter()
+                    ->closeModalByClickingAway(false)
+                    ->tooltip('Bulk-create or update employees using a CSV file')
                     ->visible(
                         fn(): bool =>
                             auth()->user()?->can('import employees') ||
