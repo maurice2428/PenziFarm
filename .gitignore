@@ -35,3 +35,6 @@ LelekweKey.pub
 *.key
 /storage/framework/views/*
 !/storage/framework/views/.gitignore
+
+/storage/framework/cache/*
+!/storage/framework/cache/.gitignore
