@@ -691,7 +691,8 @@ class EmployeeResource extends Resource
                     ->label('CSV Template')
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('gray')
-                    ->url(asset('templates/hr/employee_import_template.csv')),
+                    //->url(asset('templates/hr/employee_import_template.csv')),
+                    ->url(route('hr.employee-import-template.csv')),
                 ImportAction::make('importEmployees')
                     ->label('Import Employees (CSV)')
                     ->icon('heroicon-o-arrow-up-tray')

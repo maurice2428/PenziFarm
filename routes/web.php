@@ -117,6 +117,19 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('/data-documents/{document}/download', [DataDocumentFileController::class, 'download'])
             ->name('data-documents.download');
     });
+    Route::get('/downloads/hr/employee-import-template', function () {
+        $path = public_path('templates/hr/employee_import_template.csv');
+
+        abort_unless(is_file($path), 404, 'Employee import template not found.');
+
+        return response()->download(
+            $path,
+            'employee_import_template.csv',
+            [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+            ]
+        );
+    })->name('hr.employee-import-template.csv');
     Route::get(
         '/animals/{animal}/profile/pdf',
         AnimalProfilePdfController::class
