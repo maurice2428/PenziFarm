@@ -7,6 +7,7 @@ use App\Filament\Pages\ProgenyExplorer;
 use App\Filament\Clusters\Livestock\Animals as AnimalsCluster;
 use App\Filament\Resources\AnimalResource\Pages;
 use App\Filament\Support\LocationForm;
+use App\Filament\Support\AnimalTagTallyCorrectionAction;
 use App\Models\Animal;
 use App\Models\AnimalGroup;
 use App\Models\AnimalWeight;
@@ -100,7 +101,7 @@ class AnimalResource extends Resource
                         ->helperText(
                             fn (string $operation): string =>
                                 $operation === 'edit'
-                                    ? 'Breed is locked because it forms part of the permanent animal tag. Use Correct Animal Identity for authorised corrections.'
+                                    ? 'Breed is locked because it determines the permanent tag letter. Administrators may correct only the tally through the controlled correction modal.'
                                     : 'The selected breed determines the Penzi tag prefix.'
                         )
                         ->afterStateUpdated(function (
@@ -202,7 +203,7 @@ class AnimalResource extends Resource
                                         </div>
 
                                         <div style="margin-top:11px;color:#475569;font-size:10px;">
-                                            Normal edits cannot regenerate this tag. Administrators must use Correct Animal Identity for verified corrections.
+                                            Breed and birth year remain locked. Administrators can use the controlled Correct Tag Tally action below.
                                         </div>
                                     </div>'
                                 );
@@ -301,6 +302,20 @@ class AnimalResource extends Resource
                         })
                         ->live()
                         ->columnSpan(1),
+                    Forms\Components\Actions::make([
+                        AnimalTagTallyCorrectionAction::make(),
+                    ])
+                        ->visible(
+                            fn (string $operation): bool =>
+                                $operation === 'edit'
+                                && (
+                                    auth()->user()?->hasAnyRole([
+                                        'Administrator',
+                                        'Admin',
+                                    ]) ?? false
+                                )
+                        )
+                        ->columnSpanFull(),
                     Forms\Components\Select::make('sex')
                         ->options([
                             'Male' => 'Male',
@@ -321,7 +336,7 @@ class AnimalResource extends Resource
                         ->helperText(
                             fn (string $operation): string =>
                                 $operation === 'edit'
-                                    ? 'Date of birth is locked because its year forms part of the permanent animal tag.'
+                                    ? 'Date of birth is locked because its year determines the permanent tag year.'
                                     : 'The birth year determines the year portion of the animal tag.'
                         )
                         ->afterStateUpdated(function (

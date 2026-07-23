@@ -38,3 +38,9 @@ LelekweKey.pub
 
 /storage/framework/cache/*
 !/storage/framework/cache/.gitignore
+
+# Local installer and manual backups
+.penzi-*-backup*
+.penzi_*_backup*
+*.backup
+*.backup-*
