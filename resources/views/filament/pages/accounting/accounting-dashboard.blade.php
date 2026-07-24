@@ -15,7 +15,7 @@
         <section class="lw-hero">
             <div class="lw-hero-inner">
                 <div>
-                    <span class="lw-eyebrow"><x-heroicon-o-presentation-chart-line class="h-4 w-4" /> Lelekwe financial brain</span>
+                    <span class="lw-eyebrow"><x-heroicon-o-presentation-chart-line class="h-4 w-4" /> Financial Brain</span>
                     <h2>Accounting Command Centre</h2>
                     <p>
                         Executive finance view for income, farm costs, profit trend, balance checks, project funds,
